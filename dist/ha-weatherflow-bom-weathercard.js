@@ -551,14 +551,20 @@ class Dash4WeatherCard extends HTMLElement {
     // Right edge is different: it's always the true end of this array (both
     // Today and Tomorrow's lists end at 11pm, with no further hours anywhere
     // in this graph) - flat-extending there previously implied "more data to
-    // scroll to," which isn't true. Instead, if the last hour has rain, add a
-    // synthetic taper-to-baseline point at the true edge and let the existing
-    // Catmull-Rom smoothing curve the line down to it naturally, rather than
-    // a hard flat line or an abrupt angle.
+    // scroll to," which isn't true. If the last hour has rain, taper down to
+    // baseline instead. The curve through the real points is computed first,
+    // untouched by this - feeding a synthetic zero point straight into
+    // catmullRomSegments() let it pull the LAST REAL point's own tangent
+    // (Catmull-Rom looks at each point's neighbors on both sides), bulging
+    // the line upward right before the drop even though that hour's own
+    // reading was flat/unchanged from the one before it. Instead, the taper
+    // is a separate, explicitly-built Bezier appended after: its first
+    // control point sits level with the last real point (keeps the approach
+    // flat, matching the actual data), its second pulls down near baseline,
+    // so only the final stretch past the real data visibly dives.
     const extendRight = points.length > 0 && points[points.length - 1].prob > 0;
     const baselineY = chartHeight - padBottom;
-    const curvePoints = extendRight ? points.concat([{ x: width, y: baselineY, prob: 0 }]) : points;
-    const curveSegs = catmullRomSegments(curvePoints);
+    const curveSegs = catmullRomSegments(points);
 
     const topSegs = [];
     if (extendLeft) {
@@ -567,6 +573,12 @@ class Dash4WeatherCard extends HTMLElement {
       topSegs.push(...curveSegs.slice(1));
     } else {
       topSegs.push(...curveSegs);
+    }
+    if (extendRight) {
+      const lastPt = points[points.length - 1];
+      const cp1x = lastPt.x + (width - lastPt.x) * 0.5;
+      const cp2x = lastPt.x + (width - lastPt.x) * 0.85;
+      topSegs.push(`C${cp1x.toFixed(1)},${lastPt.y.toFixed(1)} ${cp2x.toFixed(1)},${baselineY.toFixed(1)} ${width.toFixed(1)},${baselineY.toFixed(1)}`);
     }
 
     const areaStartX = extendLeft ? 0 : (points.length ? points[0].x : 0);
