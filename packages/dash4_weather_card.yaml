@@ -245,17 +245,18 @@ template:
             {% set bom = states('input_text.dash4_bom_prefix') %}
             {% set warnings = state_attr(('sensor.' ~ bom ~ '_warnings'), 'warnings') | default([], true) %}
             {% if warnings | length > 0 %}
-              {# Prefer short_title + state (e.g. "Hazardous Surf Warning · NSW") over the
-                 raw title field - some BOM warning types (e.g. Severe Weather Warnings)
-                 name specific forecast districts by name in their title text, which would
-                 be more geographically narrowing than a state-level descriptor. Falls back
-                 to the raw title if a warning entry doesn't have both fields (older BOM
-                 integration versions, or an unexpected warning shape). #}
+              {# Uses BOM's raw title text (e.g. "Severe Weather Warning for the Northern
+                 Rivers and Mid North Coast Forecast Districts") rather than a state-level
+                 summary - a state-wide warning could be for conditions hundreds of km away
+                 and isn't actually locally useful. This text is generated live per-installer
+                 from whichever BOM location prefix they've configured (input_text.dash4_bom_prefix)
+                 - it is never hardcoded in this file, so it reflects each user's own area,
+                 not this household's. Only static screenshots published alongside this code
+                 could ever reveal a specific district name - re-check screenshot content
+                 (not this code) if that's a concern before publishing/updating them. #}
               {% set ns = namespace(titles=[]) %}
               {% for w in warnings %}
-                {% set short_title = w.get('short_title') if w is mapping else none %}
-                {% set state_abbr = w.get('state') if w is mapping else none %}
-                {% set t = (short_title ~ ' · ' ~ state_abbr) if (short_title and state_abbr) else (w.get('title', w | string) if w is mapping else w) %}
+                {% set t = (w.get('title', w | string) if w is mapping else w) %}
                 {% set ns.titles = ns.titles + [t | string] %}
               {% endfor %}
               {% set extra = warnings | length - 1 %}
