@@ -41,9 +41,9 @@ Tap the graph to switch to a raw numeric grid instead; tap that to collapse, or 
 
 ### 1. The card (via HACS)
 
-Add this repository as a HACS custom repository (category: Lovelace), then install "WeatherFlow + BOM Weather Card." This installs `dash4-weather-card.js` as a Lovelace resource automatically.
+Add this repository as a HACS custom repository (category: **Dashboard**), then install "WeatherFlow + BOM Weather Card." This installs `ha-weatherflow-bom-weathercard.js` as a Lovelace resource automatically.
 
-Alternatively, copy `www/dash4-weather-card/dash4-weather-card.js` into your own `config/www/dash4-weather-card/` folder and add it manually as a Lovelace resource (Settings → Dashboards → Resources → Add Resource, type: JavaScript Module).
+Alternatively, copy `dist/ha-weatherflow-bom-weathercard.js` into your own `config/www/` folder and add it manually as a Lovelace resource (Settings → Dashboards → Resources → Add Resource, type: JavaScript Module). The internal card tag stays `custom:dash4-weather-card` either way (see step 3) — only the distributed filename changed, to satisfy HACS's naming convention.
 
 ### 2. The data layer (manual copy — HACS can't install arbitrary YAML packages)
 

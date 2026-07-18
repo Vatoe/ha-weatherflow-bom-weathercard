@@ -82,6 +82,7 @@ const STYLE = `
   .alert-lines.warning { border-left-color: #FF453A; }
   .alert-lines .l1 { font-size: 13.5px; font-weight: 500; color: var(--primary-text-color); }
   .alert-lines .l2 { font-size: 12px; color: var(--secondary-text-color); margin-top: 2px; }
+  .alert-lines .count-inline { font-size: 12px; color: var(--secondary-text-color); font-weight: 400; white-space: nowrap; }
   .alert-lines.tappable { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
   .alert-lines.tappable:active { transform: scale(0.98); transition: transform 0.08s; }
   .forecast tr.tappable-row { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -274,7 +275,6 @@ class Dash4WeatherCard extends HTMLElement {
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
   // cyclable). Same pattern used by mushroom.js for its own variable-height cards.
-  // See docs/reference/best-practices/lovelace-custom-cards.md.
   getGridOptions() {
     return { columns: 12 };
   }
@@ -427,8 +427,8 @@ class Dash4WeatherCard extends HTMLElement {
 
         ${alertShow ? `
         <div class="alert-lines${alert.is_warning ? ' warning' : ''}${alertCyclable ? ' tappable' : ''}">
-          <div class="l1">${escapeHtml(alertLine1 || '')}</div>
-          ${alertLine2 ? `<div class="l2">${escapeHtml(alertLine2)}</div>` : ''}
+          <div class="l1">${escapeHtml(alertLine1 || '')}${alertCyclable ? ` <span class="count-inline">${escapeHtml(alertLine2)}</span>` : ''}</div>
+          ${(!alertCyclable && alertLine2) ? `<div class="l2">${escapeHtml(alertLine2)}</div>` : ''}
         </div>` : ''}
       </div>
     `;

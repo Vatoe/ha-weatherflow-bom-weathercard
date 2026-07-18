@@ -1,6 +1,5 @@
 {
   "name": "DASH-4 Weather Card (WeatherFlow + BOM)",
   "render_readme": true,
-  "filename": "dash4-weather-card.js",
-  "content_in_root": false
+  "filename": "ha-weatherflow-bom-weathercard.js"
 }
