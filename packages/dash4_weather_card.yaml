@@ -84,8 +84,23 @@ template:
               else 'feels-colder-extreme' if feels != 999 and feels < 10
               else ('feels-colder-extreme' if ns.cold else 'feels-colder') if feels != 999 and feels < 14
               else '' %}
+            {# Live gusting check (no hold/debounce - reflects the current reading only,
+               reverts the moment the next station update reports a lower value). 25km/h
+               chosen from live data 2026-07-18: normal breezy conditions regularly sit in
+               the high-teens/low-20s, so 25 catches genuine gust spikes without flagging
+               ordinary wind. Folded into the existing 'wind' reading rather than a
+               separate competing priority entry - it's just richer content for the same
+               reading, not a new mode. #}
+            {% set gust = states(('sensor.' ~ wf ~ '_wind_gust')) | float(0) %}
+            {% set gusting = gust >= 25 %}
             {{ {
-              'wind': {'label': 'Wind', 'value': wind_compass, 'sub': wind_spd_sub, 'cls': '', 'compact': false},
+              'wind': {
+                'label': ('Wind - Gusting' if gusting else 'Wind'),
+                'value': wind_compass,
+                'sub': ((wind_spd_sub ~ ' · Gust ' ~ (gust | round(0) | int | string) ~ ' km/h') if gusting else wind_spd_sub),
+                'cls': ('wind-notable' if gusting else ''),
+                'compact': false
+              },
               'rain': {'label': 'Rain', 'value': (rain_rate | round(1) | string), 'sub': (rain_intensity | title if rain_intensity not in ['none','unknown','unavailable',''] else 'None'), 'cls': 'rain', 'compact': false},
               'lightning': {'label': 'Lightning', 'value': (lightning_count | string), 'sub': 'strikes/hr', 'cls': 'lightning', 'compact': false},
               'uv': {'label': ('UV · ' ~ uv_rating), 'value': (uv | round(0) | int | string), 'sub': '', 'cls': 'uv', 'compact': true},

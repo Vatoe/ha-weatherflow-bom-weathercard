@@ -50,7 +50,7 @@ const STYLE = `
   .box3.tappable:active { transform: scale(0.97); transition: transform 0.08s; }
 
   .box3.rain .value { color: #66D4CF; }
-  .box3.lightning .value { color: #FF9F0A; }
+  .box3.lightning .value, .box3.wind-notable .value { color: #FF9F0A; }
   .box3.high-wind .value, .box3.uv-extreme .value,
   .box3.rain-extreme .value, .box3.lightning-extreme .value,
   .box.high-temp-extreme .value, .box3.feels-hotter-extreme .value {
