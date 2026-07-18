@@ -95,9 +95,9 @@ template:
             {% set gusting = gust >= 25 %}
             {{ {
               'wind': {
-                'label': ('Wind - Gusting' if gusting else 'Wind'),
+                'label': ('Gusting' if gusting else 'Wind'),
                 'value': wind_compass,
-                'sub': ((wind_spd_sub ~ ' · Gust ' ~ (gust | round(0) | int | string) ~ ' km/h') if gusting else wind_spd_sub),
+                'sub': ((gust | round(0) | int | string) ~ ' km/h' if gusting else wind_spd_sub),
                 'cls': ('wind-notable' if gusting else ''),
                 'compact': false
               },
