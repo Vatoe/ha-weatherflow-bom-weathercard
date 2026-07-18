@@ -32,6 +32,12 @@ Tap the graph to switch to a raw numeric grid instead; tap that to collapse, or 
 
 ![Raw grid view](images/card-raw-view.png)
 
+### Warnings footer
+
+A footer strip surfaces any active BOM warnings for your configured location (`dash4_bom_prefix`) — red left-border while a warning's active, tap it to cycle through multiple warnings one at a time if there's more than one ("1 of 2" etc., merged onto the title line when there's room). When nothing's active, it falls back to showing today's plain BOM outlook text instead, no red border.
+
+**Where the wording comes from, and why it can vary in specificity:** this footer shows BOM's own warning title text verbatim — the card doesn't filter, summarize, or rewrite it. Your BOM integration was set up pointing at a specific location, and BOM's own backend checks that location against *all* of its warning zone types independently (marine districts, severe weather forecast districts, fire danger areas, flood districts, heatwave zones, etc.) — each zone type is drawn with completely different boundaries for its own purpose, so a single point can simultaneously sit inside a broad marine zone, a differently-shaped severe-weather district, and so on. BOM's API returns whatever's currently active for *any* zone containing that point, and the title wording it uses is entirely up to BOM and varies by warning type: some are worded at state level ("... for New South Wales"), others name a specific forecast district by name. Which one you see at any moment depends purely on which BOM zone type happens to have something active right now — not something this card controls or can normalize, since it's just displaying whatever text BOM's API provides for your own configured location.
+
 ## Prerequisites
 
 - A **WeatherFlow Tempest** weather station, set up via Home Assistant's WeatherFlow integration
