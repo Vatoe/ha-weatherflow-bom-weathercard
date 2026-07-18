@@ -20,7 +20,7 @@ const STYLE = `
     -webkit-backdrop-filter: var(--ha-card-backdrop-filter, blur(20px));
     border-radius: var(--ha-card-border-radius, 12px);
     box-shadow: var(--ha-card-box-shadow, none);
-    padding: 12px 18px 9px;
+    padding: 12px 18px 12px;
     color: var(--primary-text-color);
     font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
