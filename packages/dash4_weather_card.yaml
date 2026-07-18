@@ -248,22 +248,27 @@ template:
               {% set tmax = (tmax_raw | round(0) | int | string) if tmax_raw != 999 else '--' %}
               {% set tmin = (tmin_raw | round(0) | int | string) if tmin_raw != 999 else '--' %}
               {% set rain_chance_state = states(('sensor.' ~ bom ~ '_rain_chance_' ~ i)) %}
-              {# Today only: use the max of the remaining hours' probabilities instead of
-                 BOM's whole-day figure, so the collapsed row always matches the peak of
-                 the expanded hourly graph. BOM's own hourly forecast endpoint already
-                 excludes elapsed hours (confirmed live: the list's first entry and length
-                 both track forward with wall-clock time), so this genuinely reflects
-                 "remaining chance for today," not a stale whole-day aggregate. Other rows
-                 are entirely in the future, so BOM's daily figure already IS "remaining
-                 chance" for them - no adjustment needed. #}
-              {% if label == 'Today' and hourly_today | length > 0 %}
-                {% set rain_chance_num = hourly_today | map(attribute='prob') | max %}
+              {% set hourly_for_day = hourly_today if label == 'Today' else (hourly_tomorrow if label == 'Tmow' else []) %}
+              {# Today/Tmow: use the max of that day's hourly probabilities instead of
+                 BOM's whole-day figure, so the collapsed row always matches the peak
+                 shown in the expanded hourly graph. BOM's daily POP is "probability of
+                 any rain during the day" - a different statistic from any single hour's
+                 chance, and it's normal for it to sit higher than every hourly reading
+                 (same reason "chance of rain sometime this week" > "chance in any given
+                 hour"). Confirmed live 2026-07-19 this isn't just a Today/elapsed-hours
+                 thing: Tmow showed daily 90% vs hourly max 50% even though Tmow's hourly
+                 data covers the FULL day (all 24 entries, nothing elapsed) - a genuine
+                 daily-vs-hourly statistical mismatch, not stale data. Tue/Wed/Thu have no
+                 hourly forecast coverage at all, so they keep reading BOM's daily figure
+                 directly - nothing to be inconsistent with. #}
+              {% if hourly_for_day | length > 0 %}
+                {% set rain_chance_num = hourly_for_day | map(attribute='prob') | max %}
               {% elif rain_chance_state not in ['unavailable', 'unknown'] %}
                 {% set rain_chance_num = rain_chance_state | int %}
               {% else %}
                 {% set rain_chance_num = 0 %}
               {% endif %}
-              {% set rain_chance = (rain_chance_num | string) ~ '%' if (rain_chance_state not in ['unavailable', 'unknown'] or (label == 'Today' and hourly_today | length > 0)) else '--' %}
+              {% set rain_chance = (rain_chance_num | string) ~ '%' if (rain_chance_state not in ['unavailable', 'unknown'] or hourly_for_day | length > 0) else '--' %}
               {% set outlook = states(('sensor.' ~ bom ~ '_short_text_' ~ i)) %}
               {% set icon = icons[i] if i < icons | length else 'mdi:weather-cloudy' %}
               {% set tappable = (label == 'Today' and rain_chance_num > 0 and hourly_today | length > 0) or (label == 'Tmow' and rain_chance_num > 0 and hourly_tomorrow | length > 0) %}

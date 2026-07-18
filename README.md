@@ -26,6 +26,8 @@ A 5-day forecast table sourced from BOM, with day labels derived from each forec
 
 Tap on Today or Tomorrow (when rain is forecast) to expand an inline, horizontally-scrollable hourly rain graph — smoothed curve, probability/mm/time labels.
 
+**Today and Tomorrow's rain % is the max of that day's hourly chances, not BOM's whole-day figure.** BOM's daily probability represents "chance of any rain during the day," which is a different (and usually higher) statistic than any single hour's chance — showing it as the row's headline number could disagree with the peak you'd see after tapping to expand the graph, which reads as contradictory at a glance. Tuesday/Wednesday/Thursday still show BOM's daily figure directly, since BOM's hourly data only covers the next ~48 hours and there's no expanded graph for those rows to be inconsistent with.
+
 ![Graph view](images/card-graph-view.png)
 
 **Scrolling:** the graph covers the full day (24 hours for Tomorrow; Today only ever has hours from "now" onward, since forecast data is forward-looking, not historical). On first expand it auto-scrolls so the *current* hour sits centered in the visible viewport — for Today this naturally can't be a true center (there's nothing earlier than "now" to center against), so it opens at its leftmost hour instead; Tomorrow centers properly with hours visible on both sides. From there it's a free horizontal scroll/swipe, no snapping to hour boundaries. Scrolling resets a 3-minute auto-collapse timer, so actively browsing the graph never gets cut off mid-swipe — a panel left untouched for 3 minutes collapses on its own.
