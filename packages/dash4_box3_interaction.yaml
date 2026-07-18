@@ -1,0 +1,117 @@
+# DASH-4 Weather Card — Box 3 tap-to-cycle interaction
+#
+# Optional but recommended: without this, the card's rotating third box (wind/
+# rain/lightning/uv/feels-like) still displays and auto-prioritizes correctly,
+# but tapping it won't do anything. With it installed, a single tap cycles
+# through whichever conditions are currently active, and a double tap (or a
+# 1-minute timeout, or a genuine new condition becoming active) resets it back
+# to automatic.
+#
+# Assumes the main card's sensor is named sensor.dash4_weather_card and the
+# two prefix helpers from dash4_public_config.yaml already exist (see README).
+
+timer:
+  dash4_box3_revert:
+    name: "Dash4 Box3 Auto-Revert"
+    duration: "00:01:00"
+
+input_select:
+  dash4_box3_reading:
+    name: "Dash4 Box3 Manual Reading"
+    options:
+      - auto
+      - wind
+      - rain
+      - lightning
+      - uv
+      - feels_like
+
+script:
+  dash4_box3_tap:
+    alias: "Dash4 | Box3 tap-to-cycle"
+    sequence:
+      - variables:
+          rain_active: "{{ state_attr('sensor.dash4_weather_card', 'rain_active') }}"
+          lightning_active: "{{ state_attr('sensor.dash4_weather_card', 'lightning_active') }}"
+          wf: "{{ states('input_text.dash4_weatherflow_prefix') }}"
+          uv_active: "{{ states(('sensor.' ~ wf ~ '_uv_index')) | float(0) > 0 }}"
+          active_cycle: >-
+            {% set base = ['wind', 'rain', 'lightning', 'uv', 'feels_like'] %}
+            {% set ns = namespace(out=[]) %}
+            {% for r in base %}
+              {% if r == 'rain' and not rain_active %}
+              {% elif r == 'lightning' and not lightning_active %}
+              {% elif r == 'uv' and not uv_active %}
+              {% else %}
+                {% set ns.out = ns.out + [r] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.out }}
+          current: >-
+            {% set manual = states('input_select.dash4_box3_reading') %}
+            {{ manual if manual != 'auto' else state_attr('sensor.dash4_weather_card', 'box3_mode') }}
+          # current may be feels_colder/feels_hotter (not manual-cycle stops), so it can be
+          # absent from active_cycle -- idx=-1 intentionally lands on active_cycle[0] (wind),
+          # i.e. tapping while an auto-only override is showing restarts the cycle from wind.
+          next_reading: >-
+            {% set idx = active_cycle.index(current) if current in active_cycle else -1 %}
+            {{ active_cycle[(idx + 1) % (active_cycle | length)] }}
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.dash4_box3_reading
+        data:
+          option: "{{ next_reading }}"
+      - action: timer.start
+        target:
+          entity_id: timer.dash4_box3_revert
+
+  dash4_box3_reset_to_auto:
+    alias: "Dash4 | Box3 reset to auto"
+    sequence:
+      - action: timer.cancel
+        target:
+          entity_id: timer.dash4_box3_revert
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.dash4_box3_reading
+        data:
+          option: auto
+
+automation:
+  - id: dash4_box3_revert_timer_finished
+    alias: "Dash4 | Box3 auto-revert timer finished"
+    triggers:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.dash4_box3_revert
+    actions:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.dash4_box3_reading
+        data:
+          option: auto
+    mode: single
+
+  - id: dash4_box3_interrupt_on_new_condition
+    alias: "Dash4 | Box3 interrupt manual pin on new condition"
+    triggers:
+      - trigger: state
+        entity_id: sensor.dash4_weather_card
+        attribute: box3_mode
+    conditions:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: input_select.dash4_box3_reading
+            state: auto
+    actions:
+      - action: timer.cancel
+        target:
+          entity_id: timer.dash4_box3_revert
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.dash4_box3_reading
+        data:
+          option: auto
+    mode: single

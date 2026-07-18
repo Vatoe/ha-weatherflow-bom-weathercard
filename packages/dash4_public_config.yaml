@@ -1,0 +1,14 @@
+input_text:
+  dash4_weatherflow_prefix:
+    name: "Dash4 WeatherFlow Station Prefix"
+    initial: "REPLACE_WITH_YOUR_STATION_ID"   # e.g. tempest_st_XXXXXXXX - check Settings > Devices & Services
+                                                # for your WeatherFlow/Tempest station, then look at any of its
+                                                # sensor entity_ids (e.g. sensor.<this>_temperature) to find
+                                                # the exact prefix your installation uses.
+    max: 255
+  dash4_bom_prefix:
+    name: "Dash4 BOM Location Prefix"
+    initial: "REPLACE_WITH_YOUR_BOM_SUBURB"    # the location prefix your BOM integration uses - check your
+                                                # weather.<this> entity's entity_id, and the sensor.<this>_temp_max_0
+                                                # style forecast entities it creates alongside it.
+    max: 255

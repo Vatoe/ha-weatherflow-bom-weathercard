@@ -1,0 +1,349 @@
+template:
+  - sensor:
+      - name: "Dash4 Weather Card"
+        unique_id: dash4_weather_card
+        state: "ok"
+        attributes:
+          box1_temp: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set tempest_t = states(('sensor.' ~ wf ~ '_temperature')) | float(999) %}
+            {% set t = tempest_t if tempest_t != 999 else (state_attr(('weather.' ~ bom), 'temperature') | float(999)) %}
+            {{ ('%.1f' | format(t)) ~ '°' if t != 999 else '--' }}
+          box1_border: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set tempest_t = states(('sensor.' ~ wf ~ '_temperature')) | float(999) %}
+            {% set t = tempest_t if tempest_t != 999 else (state_attr(('weather.' ~ bom), 'temperature') | float(999)) %}
+            {# BOM warning escalation (added 2026-07-18): a matching BOM warning upgrades an
+               already-solid hot/cold tier straight to pulsing - it never colors an otherwise-
+               neutral (14-29.9°C) reading. BOM's own heatwave severity service is a separate
+               product from this per-area warnings feed, so the 'heat' match is opportunistic
+               (may rarely fire); 'frost'/'grazier'/'cold' reliably catches real Sheep Graziers/
+               frost warnings for this region. Keep this block in sync with readings/feels_cls
+               below if the keyword list changes - can't share {% set %} scope across attributes. #}
+            {% set bom_warnings = state_attr(('sensor.' ~ bom ~ '_warnings'), 'warnings') or [] %}
+            {% set ns = namespace(heat=false, cold=false) %}
+            {% for w in bom_warnings %}
+              {% set txt = ((w.type | default('')) ~ ' ' ~ (w.title | default(''))) | lower %}
+              {% if 'heat' in txt %}{% set ns.heat = true %}{% endif %}
+              {% if 'frost' in txt or 'grazier' in txt or 'cold' in txt %}{% set ns.cold = true %}{% endif %}
+            {% endfor %}
+            {% if t != 999 and t >= 35 %}high-temp-extreme
+            {%- elif t != 999 and t >= 30 %}{{ 'high-temp-extreme' if ns.heat else 'high-temp' }}
+            {%- elif t != 999 and t < 10 %}low-temp-extreme
+            {%- elif t != 999 and t < 14 %}{{ 'low-temp-extreme' if ns.cold else 'low-temp' }}
+            {%- else %}neutral
+            {%- endif %}
+          box2_humidity: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set tempest_h = states(('sensor.' ~ wf ~ '_humidity')) %}
+            {% set h = (tempest_h | int) if tempest_h not in ['unavailable', 'unknown'] else (state_attr(('weather.' ~ bom), 'humidity') | int(999)) %}
+            {{ (h ~ '%') if h != 999 else '--' }}
+          readings: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set actual = states(('sensor.' ~ wf ~ '_temperature')) | float(999) %}
+            {% set feels = states(('sensor.' ~ wf ~ '_feels_like_temperature')) | float(999) %}
+            {% set tempest_wind_dir = states(('sensor.' ~ wf ~ '_wind_bearing_avg')) %}
+            {% set tempest_offline_wind = tempest_wind_dir in ['unavailable', 'unknown'] %}
+            {% set compass = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'] %}
+            {% if not tempest_offline_wind %}
+              {% set wind_dir = tempest_wind_dir | float(0) %}
+              {% set compass_idx = ((wind_dir % 360) / 22.5) | round(0, 'common') | int % 16 %}
+              {% set wind_compass = compass[compass_idx] %}
+              {% set wind_spd_sub = (states(('sensor.' ~ wf ~ '_wind_speed_avg')) | float(0) | round(1) | string) ~ ' km/h' %}
+            {%- else %}
+              {% set wind_compass = state_attr(('weather.' ~ bom), 'wind_bearing') | default('--', true) %}
+              {% set bom_wind_spd = state_attr(('weather.' ~ bom), 'wind_speed') %}
+              {% set wind_spd_sub = ((bom_wind_spd | float | round(1) | string) ~ ' km/h') if bom_wind_spd is not none else '--' %}
+            {%- endif %}
+            {% set rain_intensity = states(('sensor.' ~ wf ~ '_rain_intensity')) %}
+            {% set rain_rate = states(('sensor.' ~ wf ~ '_rain_rate')) | float(0) %}
+            {% set lightning_count = states(('sensor.' ~ wf ~ '_lightning_count_last_hour')) | int(0) %}
+            {% set uv = states(('sensor.' ~ wf ~ '_uv_index')) | float(0) %}
+            {% set uv_rating = 'Low' if uv < 3 else 'Moderate' if uv < 6 else 'High' if uv < 8 else 'Very High' if uv < 11 else 'Extreme' %}
+            {% set feels_str = (('%.1f' | format(feels)) ~ '°') if feels != 999 else '--' %}
+            {% set actual_str = (('%.1f' | format(actual)) ~ '°C') if actual != 999 else '--' %}
+            {# Box-3 feels-like numeral color tier - same 4 thresholds as box1_border above
+               (10/14 cold, 30/35 hot), applied to the feels-like value itself so coloring
+               reflects the number shown regardless of which narrative (feels_like/feels_colder/
+               feels_hotter) selected it. Keep in sync with box1_border if thresholds change.
+               Same BOM-warning escalation as box1_border - see that block's comment for why
+               'heat' is opportunistic and 'frost'/'grazier'/'cold' is the reliable one. #}
+            {% set bom_warnings = state_attr(('sensor.' ~ bom ~ '_warnings'), 'warnings') or [] %}
+            {% set ns = namespace(heat=false, cold=false) %}
+            {% for w in bom_warnings %}
+              {% set txt = ((w.type | default('')) ~ ' ' ~ (w.title | default(''))) | lower %}
+              {% if 'heat' in txt %}{% set ns.heat = true %}{% endif %}
+              {% if 'frost' in txt or 'grazier' in txt or 'cold' in txt %}{% set ns.cold = true %}{% endif %}
+            {% endfor %}
+            {% set feels_cls = 'feels-hotter-extreme' if feels != 999 and feels >= 35
+              else ('feels-hotter-extreme' if ns.heat else 'feels-hotter') if feels != 999 and feels >= 30
+              else 'feels-colder-extreme' if feels != 999 and feels < 10
+              else ('feels-colder-extreme' if ns.cold else 'feels-colder') if feels != 999 and feels < 14
+              else '' %}
+            {{ {
+              'wind': {'label': 'Wind', 'value': wind_compass, 'sub': wind_spd_sub, 'cls': '', 'compact': false},
+              'rain': {'label': 'Rain', 'value': (rain_rate | round(1) | string), 'sub': (rain_intensity | title if rain_intensity not in ['none','unknown','unavailable',''] else 'None'), 'cls': 'rain', 'compact': false},
+              'lightning': {'label': 'Lightning', 'value': (lightning_count | string), 'sub': 'strikes/hr', 'cls': 'lightning', 'compact': false},
+              'uv': {'label': ('UV · ' ~ uv_rating), 'value': (uv | round(0) | int | string), 'sub': '', 'cls': 'uv', 'compact': true},
+              'feels_like': {'label': 'Feels Like', 'value': feels_str, 'sub': '', 'cls': feels_cls, 'compact': true},
+              'feels_colder': {'label': 'Feels Like', 'value': feels_str, 'sub': ('Actual ' ~ actual_str), 'cls': feels_cls, 'compact': false},
+              'feels_hotter': {'label': 'Feels Like', 'value': feels_str, 'sub': ('Actual ' ~ actual_str), 'cls': feels_cls, 'compact': false}
+            } }}
+          rain_active: >-
+            {# Rain must not just have a non-none intensity descriptor but also a nonzero
+               rate - otherwise box3 can select/prioritize "Rain" while showing 0.0 (a
+               stale/lagging intensity reading vs a real-time rate of zero). Added 2026-07-18. #}
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {{ states(('sensor.' ~ wf ~ '_rain_intensity')) not in ['none', 'unknown', 'unavailable', ''] and (states(('sensor.' ~ wf ~ '_rain_rate')) | float(0) > 0) }}
+          lightning_active: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {{ states(('sensor.' ~ wf ~ '_lightning_count_last_hour')) | int(0) > 0 }}
+          high_wind_gust: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {{ states(('sensor.' ~ wf ~ '_wind_gust')) | float(0) >= 60 }}
+          rain_extreme: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {{ states(('sensor.' ~ wf ~ '_rain_intensity')) | lower == 'extreme' and (states(('sensor.' ~ wf ~ '_rain_rate')) | float(0) > 0) }}
+          lightning_extreme: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {{ states(('sensor.' ~ wf ~ '_lightning_count_last_hour')) | int(0) >= 10 }}
+          box3_mode: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {% set actual = states(('sensor.' ~ wf ~ '_temperature')) | float(999) %}
+            {% set feels = states(('sensor.' ~ wf ~ '_feels_like_temperature')) | float(999) %}
+            {% set gap = (feels - actual) if (actual != 999 and feels != 999) else 0 %}
+            {% set cold_flag = gap < 0 and (
+              (actual > 19 and actual <= 23 and -gap > 4) or
+              (actual > 15 and actual <= 19 and -gap >= 3) or
+              (actual > 10 and actual <= 15 and -gap >= 2) or
+              (actual <= 10 and -gap >= 1)
+            ) %}
+            {% set hot_flag = gap > 0 and (
+              (actual > 25 and actual <= 30 and gap >= 3) or
+              (actual > 30 and actual <= 35 and gap >= 2) or
+              (actual > 35 and gap >= 1)
+            ) %}
+            {% set rain_active = this.attributes.get('rain_active', false) %}
+            {% set lightning_active = this.attributes.get('lightning_active', false) %}
+            {% set uv_active = states(('sensor.' ~ wf ~ '_uv_index')) | float(0) >= 11 %}
+            {# Extremes are checked first, in their own priority order, so a genuine extreme
+               (e.g. a 70km/h gust) always outranks a merely-active non-extreme condition (e.g.
+               light rain) - previously "extreme" only affected coloring of whichever reading
+               already won the plain active-priority race below, wind especially could never
+               surface on its own merit since it wasn't in that race at all (fallback only). #}
+            {% set extreme_priorities = [
+              {'name': 'wind', 'active': this.attributes.get('high_wind_gust', false)},
+              {'name': 'feels_colder', 'active': cold_flag},
+              {'name': 'feels_hotter', 'active': hot_flag},
+              {'name': 'rain', 'active': this.attributes.get('rain_extreme', false)},
+              {'name': 'lightning', 'active': this.attributes.get('lightning_extreme', false)},
+              {'name': 'uv', 'active': uv_active}
+            ] %}
+            {% set active_priorities = [
+              {'name': 'feels_colder', 'active': cold_flag},
+              {'name': 'feels_hotter', 'active': hot_flag},
+              {'name': 'rain', 'active': rain_active},
+              {'name': 'lightning', 'active': lightning_active},
+              {'name': 'uv', 'active': uv_active}
+            ] %}
+            {% set ns = namespace(mode=none) %}
+            {% for p in extreme_priorities %}
+              {% if p.active and ns.mode is none %}
+                {% set ns.mode = p.name %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.mode is none %}
+              {% for p in active_priorities %}
+                {% if p.active and ns.mode is none %}
+                  {% set ns.mode = p.name %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.mode if ns.mode is not none else 'wind' }}
+          extreme_count: >-
+            {# cold_flag/hot_flag/uv_extreme thresholds are duplicated from box3_mode below -
+               HA template attributes can't share {% set %} scope with each other, so if these
+               thresholds are ever retuned, update both places (plus the client-side uvExtreme
+               check in dash4-weather-card.js) or box3_mode's selection/coloring and this
+               multi-extreme indicator will silently drift out of sync. #}
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {% set actual = states(('sensor.' ~ wf ~ '_temperature')) | float(999) %}
+            {% set feels = states(('sensor.' ~ wf ~ '_feels_like_temperature')) | float(999) %}
+            {% set gap = (feels - actual) if (actual != 999 and feels != 999) else 0 %}
+            {% set cold_flag = gap < 0 and (
+              (actual > 19 and actual <= 23 and -gap > 4) or
+              (actual > 15 and actual <= 19 and -gap >= 3) or
+              (actual > 10 and actual <= 15 and -gap >= 2) or
+              (actual <= 10 and -gap >= 1)
+            ) %}
+            {% set hot_flag = gap > 0 and (
+              (actual > 25 and actual <= 30 and gap >= 3) or
+              (actual > 30 and actual <= 35 and gap >= 2) or
+              (actual > 35 and gap >= 1)
+            ) %}
+            {% set uv_extreme = states(('sensor.' ~ wf ~ '_uv_index')) | float(0) >= 11 %}
+            {{ (cold_flag | int) + (hot_flag | int) + (this.attributes.get('high_wind_gust', false) | int) + (this.attributes.get('rain_extreme', false) | int) + (this.attributes.get('lightning_extreme', false) | int) + (uv_extreme | int) }}
+          box3_effective_mode: >-
+            {% set manual = states('input_select.dash4_box3_reading') %}
+            {{ manual if manual not in ['auto', 'unknown', 'unavailable'] else this.attributes.get('box3_mode', 'wind') }}
+          box3_display: >-
+            {% set mode = this.attributes.get('box3_effective_mode', 'wind') %}
+            {% set readings = this.attributes.get('readings', {}) %}
+            {% set r = readings.get(mode) if readings else none %}
+            {% if r is none %}
+              {{ {'label': '--', 'value': '--', 'sub': '', 'cls': '', 'compact': false} }}
+            {%- elif mode == 'wind' and this.attributes.get('high_wind_gust', false) %}
+              {{ {'label': r.label, 'value': r.value, 'sub': r.sub, 'cls': 'high-wind', 'compact': r.compact} }}
+            {%- elif mode == 'rain' and this.attributes.get('rain_extreme', false) %}
+              {{ {'label': r.label, 'value': r.value, 'sub': r.sub, 'cls': 'rain-extreme', 'compact': r.compact} }}
+            {%- elif mode == 'lightning' and this.attributes.get('lightning_extreme', false) %}
+              {{ {'label': r.label, 'value': r.value, 'sub': r.sub, 'cls': 'lightning-extreme', 'compact': r.compact} }}
+            {%- else %}
+              {{ r }}
+            {%- endif %}
+          forecast_rows: >-
+            {# Day labels are derived from each BOM sensor's own `date` attribute (ground
+               truth), not from index position - BOM's day-index sensors only shift when
+               BOM issues a new forecast (~5:40am and ~4pm), not at the midnight clock
+               boundary, so between midnight and the next reissue index 0 can still be
+               holding yesterday's now-stale data while index 1 has quietly become today.
+               A naive "index 0 = Today" label would misreport every row by one day during
+               that ~5.5hr window every night. #}
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set icons = state_attr('sensor.dash4_forecast_icons', 'icons') | default(['mdi:weather-cloudy']*5, true) %}
+            {% set hourly_today = state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_today') | default([], true) %}
+            {% set hourly_tomorrow = state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_tomorrow') | default([], true) %}
+            {% set today = now().date() %}
+            {% set ns = namespace(rows=[]) %}
+            {% for i in range(5) %}
+              {% set date_attr = state_attr(('sensor.' ~ bom ~ '_temp_max_' ~ i), 'date') %}
+              {% set row_date = as_datetime(date_attr).date() if date_attr else (today + timedelta(days=i)) %}
+              {% set day_offset = (row_date - today).days %}
+              {% set label = 'Today' if day_offset == 0 else ('Tmow' if day_offset == 1 else row_date.strftime('%a')) %}
+              {% set tmax_raw = states(('sensor.' ~ bom ~ '_temp_max_' ~ i)) | float(999) %}
+              {% set tmin_raw = states(('sensor.' ~ bom ~ '_temp_min_' ~ i)) | float(999) %}
+              {% set tmax = (tmax_raw | round(0) | int | string) if tmax_raw != 999 else '--' %}
+              {% set tmin = (tmin_raw | round(0) | int | string) if tmin_raw != 999 else '--' %}
+              {% set rain_chance_state = states(('sensor.' ~ bom ~ '_rain_chance_' ~ i)) %}
+              {% set rain_chance = (rain_chance_state | int | string) ~ '%' if rain_chance_state not in ['unavailable', 'unknown'] else '--' %}
+              {% set rain_chance_num = (rain_chance_state | int(0)) if rain_chance_state not in ['unavailable', 'unknown'] else 0 %}
+              {% set outlook = states(('sensor.' ~ bom ~ '_short_text_' ~ i)) %}
+              {% set icon = icons[i] if i < icons | length else 'mdi:weather-cloudy' %}
+              {% set tappable = (label == 'Today' and rain_chance_num > 0 and hourly_today | length > 0) or (label == 'Tmow' and rain_chance_num > 0 and hourly_tomorrow | length > 0) %}
+              {% set ns.rows = ns.rows + [{'day': label, 'icon': icon, 'temp_max': tmax, 'temp_min': tmin, 'rain_chance': rain_chance, 'outlook': outlook, 'tappable': tappable}] %}
+            {% endfor %}
+            {{ ns.rows }}
+          hourly_rain_today: >-
+            {{ state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_today') | default([], true) }}
+          hourly_rain_tomorrow: >-
+            {{ state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_tomorrow') | default([], true) }}
+          alert_lines: >-
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set warnings = state_attr(('sensor.' ~ bom ~ '_warnings'), 'warnings') | default([], true) %}
+            {% if warnings | length > 0 %}
+              {% set ns = namespace(titles=[]) %}
+              {% for w in warnings %}
+                {% set t = (w.get('title', w | string) if w is mapping else w) %}
+                {% set ns.titles = ns.titles + [t | string] %}
+              {% endfor %}
+              {% set extra = warnings | length - 1 %}
+              {% set line2 = ('+' ~ extra ~ ' more active warning' ~ ('s' if extra > 1 else '')) if extra > 0 else '' %}
+              {{ {'line1': ns.titles[0], 'line2': line2, 'is_warning': true, 'titles': ns.titles} }}
+            {%- else %}
+              {{ {'line1': states(('sensor.' ~ bom ~ '_short_text_0')), 'line2': '', 'is_warning': false, 'titles': []} }}
+            {%- endif %}
+          # Note: card_title_html/forecast_table_html/alert_lines_html (pre-rendered
+          # HTML for the abandoned markdown-card architecture) were removed 2026-07-17 —
+          # the live card is a standalone www/ page that reads box1_temp/box2_humidity/
+          # box3_display/forecast_rows/alert_lines directly and renders client-side.
+  - trigger:
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: homeassistant
+        event: start
+    action:
+      - action: weather.get_forecasts
+        target:
+          entity_id: "{{ 'weather.' ~ states('input_text.dash4_bom_prefix') }}"
+        data:
+          type: daily
+        response_variable: dash4_forecast_response
+    sensor:
+      - name: "Dash4 Forecast Icons"
+        unique_id: dash4_forecast_icons
+        state: "{{ now().isoformat() }}"
+        attributes:
+          icons: >-
+            {% set icon_map = {
+              'sunny': 'mdi:weather-sunny', 'clear-night': 'mdi:weather-night',
+              'cloudy': 'mdi:weather-cloudy', 'partlycloudy': 'mdi:weather-partly-cloudy',
+              'pouring': 'mdi:weather-pouring', 'rainy': 'mdi:weather-rainy',
+              'lightning': 'mdi:weather-lightning', 'lightning-rainy': 'mdi:weather-lightning-rainy',
+              'snowy': 'mdi:weather-snowy', 'snowy-rainy': 'mdi:weather-snowy-rainy',
+              'fog': 'mdi:weather-fog', 'hail': 'mdi:weather-hail',
+              'windy': 'mdi:weather-windy', 'windy-variant': 'mdi:weather-windy-variant',
+              'exceptional': 'mdi:alert-circle-outline'
+            } %}
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set forecast = dash4_forecast_response.get('weather.' ~ bom, {}).get('forecast', []) %}
+            {% set ns = namespace(out=[]) %}
+            {% for i in range(5) %}
+              {% set cond = forecast[i].condition if i < forecast | length else 'cloudy' %}
+              {% set ns.out = ns.out + [icon_map.get(cond, 'mdi:weather-cloudy')] %}
+            {% endfor %}
+            {{ ns.out }}
+  - trigger:
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: homeassistant
+        event: start
+    action:
+      - action: weather.get_forecasts
+        target:
+          entity_id: "{{ 'weather.' ~ states('input_text.dash4_bom_prefix') ~ '_hourly' }}"
+        data:
+          type: hourly
+        response_variable: dash4_hourly_response
+    sensor:
+      - name: "Dash4 Forecast Hourly Rain"
+        unique_id: dash4_forecast_hourly_rain
+        state: "{{ now().isoformat() }}"
+        attributes:
+          hourly_rain_today: >-
+            {# weather.get_forecasts' returned datetime strings are already AEST-local
+               naive strings (confirmed live 2026-07-18: as_datetime() on a sample entry
+               returns tzinfo=None with the same hour as the real local wall clock at
+               fetch time) - no UTC conversion needed, compare directly against now(). #}
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set forecast = dash4_hourly_response.get('weather.' ~ bom ~ '_hourly', {}).get('forecast', []) %}
+            {% set today = now().date() %}
+            {% set ns = namespace(out=[]) %}
+            {% for f in forecast %}
+              {% set dt = as_datetime(f.datetime) %}
+              {% if dt.date() == today %}
+                {% set hour12 = dt.hour if dt.hour <= 12 else dt.hour - 12 %}
+                {% set hour12 = 12 if hour12 == 0 else hour12 %}
+                {% set ampm = 'am' if dt.hour < 12 else 'pm' %}
+                {% set ns.out = ns.out + [{'time': (hour12 | string) ~ ampm, 'prob': (f.precipitation_probability | default(0) | int), 'mm': (f.precipitation | default(0) | float)}] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.out }}
+          hourly_rain_tomorrow: >-
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set forecast = dash4_hourly_response.get('weather.' ~ bom ~ '_hourly', {}).get('forecast', []) %}
+            {% set tomorrow = now().date() + timedelta(days=1) %}
+            {% set ns = namespace(out=[]) %}
+            {% for f in forecast %}
+              {% set dt = as_datetime(f.datetime) %}
+              {% if dt.date() == tomorrow %}
+                {% set hour12 = dt.hour if dt.hour <= 12 else dt.hour - 12 %}
+                {% set hour12 = 12 if hour12 == 0 else hour12 %}
+                {% set ampm = 'am' if dt.hour < 12 else 'pm' %}
+                {% set ns.out = ns.out + [{'time': (hour12 | string) ~ ampm, 'prob': (f.precipitation_probability | default(0) | int), 'mm': (f.precipitation | default(0) | float)}] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.out }}
