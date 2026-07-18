@@ -30,6 +30,8 @@ Tap on Today or Tomorrow (when rain is forecast) to expand an inline, horizontal
 
 **Scrolling:** the graph covers the full day (24 hours for Tomorrow; Today only ever has hours from "now" onward, since forecast data is forward-looking, not historical). On first expand it auto-scrolls so the *current* hour sits centered in the visible viewport — for Today this naturally can't be a true center (there's nothing earlier than "now" to center against), so it opens at its leftmost hour instead; Tomorrow centers properly with hours visible on both sides. From there it's a free horizontal scroll/swipe, no snapping to hour boundaries. Scrolling resets a 3-minute auto-collapse timer, so actively browsing the graph never gets cut off mid-swipe — a panel left untouched for 3 minutes collapses on its own.
 
+**Where the data genuinely ends:** if the last hour in either day's data still shows rain, the line tapers smoothly down to the baseline at that edge rather than stopping flat — Today's graph also gets a small "See Tmow for further data" note underneath, since Tomorrow's row is where the rest of the picture lives.
+
 Tap the graph to switch to a raw numeric grid instead; tap that to collapse, or double-tap the graph to collapse directly. **Tapping the day row's header itself (Today/Tmow) while it's already expanded does the same thing** as tapping the content below it — no dead spot if you naturally tap the row again instead of the graph/grid.
 
 ![Raw grid view](images/card-raw-view.png)

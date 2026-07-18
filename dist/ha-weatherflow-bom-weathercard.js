@@ -122,6 +122,15 @@ const STYLE = `
   .hourly-graph-dot { fill: #66D4CF; }
   .hourly-graph-row { display: flex; }
   .hourly-graph-col { text-align: center; flex: 0 0 auto; font-size: 11px; line-height: 1.4; }
+  .hourly-graph-more-note {
+    text-align: center;
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--secondary-text-color);
+    opacity: 0.7;
+    padding: 3px 0 0;
+    font-style: italic;
+  }
 `;
 
 function ordinal(n) {
@@ -531,20 +540,25 @@ class Dash4WeatherCard extends HTMLElement {
       return { x, y, prob };
     });
 
-    // Smooth curve through the real data points only (edge extensions below
-    // are deliberately kept as straight flat segments, not curved, so they
-    // read as a distinct "continues off-screen" cue rather than part of the
-    // data's own shape).
-    const curveSegs = catmullRomSegments(points);
-
-    // If the very first/last hour in view already has rain, extend the top
-    // edge flat out to the true x=0 / x=width boundary at that same height,
-    // so the line/area reads as continuing from off-screen rather than
-    // starting/stopping abruptly mid-chart. If the boundary hour is dry
-    // (prob 0), no extension is added - the ordinary point-to-point line
-    // already ramps up naturally once a later hour's rain actually begins.
+    // Left edge: if the first hour in view already has rain, extend the top
+    // edge flat out to the true x=0 boundary at that same height, so the
+    // line/area reads as continuing from off-screen. Left is never the
+    // genuine end of all data (Today's left edge is just "now", Tomorrow's
+    // is 12am immediately after Today's own last hour) - flat extension
+    // stays correct here, unchanged.
     const extendLeft = points.length > 0 && points[0].prob > 0;
+
+    // Right edge is different: it's always the true end of this array (both
+    // Today and Tomorrow's lists end at 11pm, with no further hours anywhere
+    // in this graph) - flat-extending there previously implied "more data to
+    // scroll to," which isn't true. Instead, if the last hour has rain, add a
+    // synthetic taper-to-baseline point at the true edge and let the existing
+    // Catmull-Rom smoothing curve the line down to it naturally, rather than
+    // a hard flat line or an abrupt angle.
     const extendRight = points.length > 0 && points[points.length - 1].prob > 0;
+    const baselineY = chartHeight - padBottom;
+    const curvePoints = extendRight ? points.concat([{ x: width, y: baselineY, prob: 0 }]) : points;
+    const curveSegs = catmullRomSegments(curvePoints);
 
     const topSegs = [];
     if (extendLeft) {
@@ -553,9 +567,6 @@ class Dash4WeatherCard extends HTMLElement {
       topSegs.push(...curveSegs.slice(1));
     } else {
       topSegs.push(...curveSegs);
-    }
-    if (extendRight) {
-      topSegs.push(`L${width.toFixed(1)},${points[points.length - 1].y.toFixed(1)}`);
     }
 
     const areaStartX = extendLeft ? 0 : (points.length ? points[0].x : 0);
@@ -579,6 +590,15 @@ class Dash4WeatherCard extends HTMLElement {
     const timeCols = hourlyData.map(h => `
             <div class="hourly-graph-col" style="width:${colWidth}px;"><div class="hourly-time">${escapeHtml(h.time)}</div></div>`).join('');
 
+    // Today's data genuinely ends at 11pm with nothing further to show here -
+    // Tomorrow's row is where the rest lives. Rendered as a sibling outside
+    // .hourly-graph-content (the wide, horizontally-scrolled element) so it
+    // stays visible at whatever scroll position the user left the graph at,
+    // rather than scrolling off with the hourly columns above it.
+    const moreDataNote = (dayKey === 'today' && extendRight)
+      ? `<div class="hourly-graph-more-note">See Tmow for further data</div>`
+      : '';
+
     return `
       <div class="hourly-graph-scroll" data-day-key="${dayKey}">
         <div class="hourly-graph-content" style="width:${width}px;">
@@ -591,7 +611,8 @@ class Dash4WeatherCard extends HTMLElement {
           <div class="hourly-graph-row">${mmCols}</div>
           <div class="hourly-graph-row">${timeCols}</div>
         </div>
-      </div>`;
+      </div>
+      ${moreDataNote}`;
   }
 
   _handleBox3Click() {
