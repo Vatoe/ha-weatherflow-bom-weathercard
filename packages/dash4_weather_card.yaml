@@ -85,14 +85,18 @@ template:
               else ('feels-colder-extreme' if ns.cold else 'feels-colder') if feels != 999 and feels < 14
               else '' %}
             {# Live gusting check (no hold/debounce - reflects the current reading only,
-               reverts the moment the next station update reports a lower value). 25km/h
-               chosen from live data 2026-07-18: normal breezy conditions regularly sit in
-               the high-teens/low-20s, so 25 catches genuine gust spikes without flagging
-               ordinary wind. Folded into the existing 'wind' reading rather than a
-               separate competing priority entry - it's just richer content for the same
-               reading, not a new mode. #}
+               reverts the moment the next station update reports a lower value). Lowered
+               25km/h -> 20km/h 2026-07-19: 25 was chosen from one night's percentile data
+               (normal breezy conditions sit high-teens/low-20s) and tracked "statistically
+               unusual for this station" rather than "feels blowy" - confirmed live
+               2026-07-19 that 14-20km/h gusts already read as genuinely blowy in person
+               (Beaufort Force 3/gentle breeze - leaves/twigs in constant motion - matches
+               the Force 3->4 boundary where wind starts to feel noteworthy to most people).
+               Folded into the existing 'wind' reading rather than a separate competing
+               priority entry - it's just richer content for the same reading, not a new
+               mode. #}
             {% set gust = states(('sensor.' ~ wf ~ '_wind_gust')) | float(0) %}
-            {% set gusting = gust >= 25 %}
+            {% set gusting = gust >= 20 %}
             {{ {
               'wind': {
                 'label': ('Gusting' if gusting else 'Wind'),
@@ -244,8 +248,22 @@ template:
               {% set tmax = (tmax_raw | round(0) | int | string) if tmax_raw != 999 else '--' %}
               {% set tmin = (tmin_raw | round(0) | int | string) if tmin_raw != 999 else '--' %}
               {% set rain_chance_state = states(('sensor.' ~ bom ~ '_rain_chance_' ~ i)) %}
-              {% set rain_chance = (rain_chance_state | int | string) ~ '%' if rain_chance_state not in ['unavailable', 'unknown'] else '--' %}
-              {% set rain_chance_num = (rain_chance_state | int(0)) if rain_chance_state not in ['unavailable', 'unknown'] else 0 %}
+              {# Today only: use the max of the remaining hours' probabilities instead of
+                 BOM's whole-day figure, so the collapsed row always matches the peak of
+                 the expanded hourly graph. BOM's own hourly forecast endpoint already
+                 excludes elapsed hours (confirmed live: the list's first entry and length
+                 both track forward with wall-clock time), so this genuinely reflects
+                 "remaining chance for today," not a stale whole-day aggregate. Other rows
+                 are entirely in the future, so BOM's daily figure already IS "remaining
+                 chance" for them - no adjustment needed. #}
+              {% if label == 'Today' and hourly_today | length > 0 %}
+                {% set rain_chance_num = hourly_today | map(attribute='prob') | max %}
+              {% elif rain_chance_state not in ['unavailable', 'unknown'] %}
+                {% set rain_chance_num = rain_chance_state | int %}
+              {% else %}
+                {% set rain_chance_num = 0 %}
+              {% endif %}
+              {% set rain_chance = (rain_chance_num | string) ~ '%' if (rain_chance_state not in ['unavailable', 'unknown'] or (label == 'Today' and hourly_today | length > 0)) else '--' %}
               {% set outlook = states(('sensor.' ~ bom ~ '_short_text_' ~ i)) %}
               {% set icon = icons[i] if i < icons | length else 'mdi:weather-cloudy' %}
               {% set tappable = (label == 'Today' and rain_chance_num > 0 and hourly_today | length > 0) or (label == 'Tmow' and rain_chance_num > 0 and hourly_tomorrow | length > 0) %}

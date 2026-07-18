@@ -518,7 +518,7 @@ class Dash4WeatherCard extends HTMLElement {
             <div class="hourly-cell">
               <div class="hourly-time">${escapeHtml(h.time)}</div>
               <div class="hourly-prob">${escapeHtml(h.prob)}%</div>
-              <div class="hourly-mm">${escapeHtml(h.mm)}mm</div>
+              <div class="hourly-mm">≤${escapeHtml(h.mm)}mm</div>
             </div>`).join('');
     return `<div class="hourly-detail" data-view="raw">${cells}</div>`;
   }
@@ -598,7 +598,7 @@ class Dash4WeatherCard extends HTMLElement {
     const probCols = hourlyData.map(h => `
             <div class="hourly-graph-col" style="width:${colWidth}px;"><div class="hourly-prob">${escapeHtml(h.prob)}%</div></div>`).join('');
     const mmCols = hourlyData.map(h => `
-            <div class="hourly-graph-col" style="width:${colWidth}px;"><div class="hourly-mm">${escapeHtml(h.mm)}mm</div></div>`).join('');
+            <div class="hourly-graph-col" style="width:${colWidth}px;"><div class="hourly-mm">≤${escapeHtml(h.mm)}mm</div></div>`).join('');
     const timeCols = hourlyData.map(h => `
             <div class="hourly-graph-col" style="width:${colWidth}px;"><div class="hourly-time">${escapeHtml(h.time)}</div></div>`).join('');
 
