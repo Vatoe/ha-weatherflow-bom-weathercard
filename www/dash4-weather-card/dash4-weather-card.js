@@ -274,6 +274,7 @@ class Dash4WeatherCard extends HTMLElement {
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
   // cyclable). Same pattern used by mushroom.js for its own variable-height cards.
+  // See docs/reference/best-practices/lovelace-custom-cards.md.
   getGridOptions() {
     return { columns: 12 };
   }
@@ -607,13 +608,20 @@ class Dash4WeatherCard extends HTMLElement {
     }
   }
 
-  // Row header taps only ever (re-)expand now - collapsing exclusively
-  // happens via taps on the graph/raw content itself (see _handleGraphTap /
-  // the raw-view click listener wired in _render). Tapping the header of the
-  // row that's *already* expanded is a no-op - that old toggle-to-collapse
-  // behavior is superseded per the new interaction model.
+  // Tapping the row header while its own panel is already expanded mirrors
+  // whatever tapping the panel's own content does - users naturally tap the
+  // row itself expecting the same cycle/close behavior, not a dead spot.
+  // Graph view: single/double-tap disambiguation (cycle to raw / collapse).
+  // Raw view: single tap collapses, matching the raw grid's own tap target.
   _handleForecastRowClick(dayKey) {
-    if (this._expandedDay === dayKey) return;
+    if (this._expandedDay === dayKey) {
+      if (this._viewMode === 'raw') {
+        this._collapseExpanded();
+      } else {
+        this._handleGraphTap();
+      }
+      return;
+    }
     // Clear any pending single/double-tap disambiguation timer from the
     // previously-expanded day's graph - otherwise it fires ~260ms later
     // against the *newly* expanded day and incorrectly flips it into raw
