@@ -34,7 +34,9 @@ Tap the graph to switch to a raw numeric grid instead; tap that to collapse, or 
 
 ### Warnings footer
 
-A footer strip surfaces any active BOM warnings for your configured location (`dash4_bom_prefix`) — red left-border while a warning's active, tap it to cycle through multiple warnings one at a time if there's more than one ("1 of 2" etc., merged onto the title line when there's room). When nothing's active, it falls back to showing today's plain BOM outlook text instead, no red border.
+A footer strip surfaces any active BOM warnings for your configured location (`dash4_bom_prefix`) — red left-border while a warning's active, tap it to cycle through multiple warnings one at a time if there's more than one ("1 of 2" etc., merged onto the title line when there's room).
+
+**No active warnings? Defaults to today's current weather description instead** — the same plain BOM outlook text shown in the 5-day forecast table's "Today" row (e.g. "Partly cloudy"), with no red border. The footer is never empty; it always shows *something* useful, whether that's an active warning or just today's general conditions.
 
 **No character limit or truncation:** the footer shows BOM's warning title text in full, however long it is — no max-height, no ellipsis, no cutting the string short. A long warning title just wraps across as many lines as it needs, and the card grows to fit (same "size to actual content, not a fixed height" approach used throughout this card).
 
