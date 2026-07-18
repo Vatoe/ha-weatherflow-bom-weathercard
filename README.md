@@ -22,9 +22,11 @@ Box 3 automatically shows whichever condition is most relevant right now, in pri
 
 A 5-day forecast table sourced from BOM, with day labels derived from each forecast entity's own date (not sensitive to BOM's forecast-reissue timing). The 5-day rows' own refresh cadence follows your BOM integration's own polling settings — this card doesn't control that. The card's own hourly-rain re-fetch (`weather.get_forecasts`, used for the tappable graph below) runs on a fixed 5-minute schedule plus once at Home Assistant startup, independent of your BOM integration's general polling.
 
-Tap on Today or Tomorrow (when rain is forecast) to expand an inline, horizontally-scrollable hourly rain graph — smoothed curve, probability/mm/time labels, opens centered on the current hour.
+Tap on Today or Tomorrow (when rain is forecast) to expand an inline, horizontally-scrollable hourly rain graph — smoothed curve, probability/mm/time labels.
 
 ![Graph view](images/card-graph-view.png)
+
+**Scrolling:** the graph covers the full day (24 hours for Tomorrow; Today only ever has hours from "now" onward, since forecast data is forward-looking, not historical). On first expand it auto-scrolls so the *current* hour sits centered in the visible viewport — for Today this naturally can't be a true center (there's nothing earlier than "now" to center against), so it opens at its leftmost hour instead; Tomorrow centers properly with hours visible on both sides. From there it's a free horizontal scroll/swipe, no snapping to hour boundaries. Scrolling resets a 3-minute auto-collapse timer, so actively browsing the graph never gets cut off mid-swipe — a panel left untouched for 3 minutes collapses on its own.
 
 Tap the graph to switch to a raw numeric grid instead; tap that to collapse, or double-tap the graph to collapse directly.
 
@@ -66,6 +68,30 @@ place_name: "YOUR HOUSE NAME"
 ```
 
 `entity` defaults to `sensor.dash4_weather_card` if omitted (matching this package's sensor name — only change it if you renamed the sensor). `uv_entity` has no safe default — set it to your own station's UV sensor, or leave it unset if you don't want the UV reading. `place_name` defaults to `"MY HOME"` if omitted.
+
+## Numeral colors, thresholds & pulsing
+
+Box 1 (temperature) and Box 3 (whichever reading is showing) can each render in one of three states: **neutral** (default color), **solid accent color** (a condition worth noting), or **pulsing accent color** (a genuine extreme). The exact triggers:
+
+**Box 1 — actual temperature:**
+| Range | Color | Pulsing? |
+|---|---|---|
+| ≥ 35°C | Red | Always |
+| 30–34.9°C | Red | Only if a matching BOM heat warning is active; otherwise solid |
+| 14–29.9°C | (neutral) | — |
+| 10–13.9°C | Blue | Only if a matching BOM frost/grazier/cold warning is active; otherwise solid |
+| < 10°C | Blue | Always |
+
+The 30–34.9°C / 10–13.9°C bands are a deliberate "not quite extreme yet" tier — a real BOM warning (heatwave, frost, Sheep Graziers) escalates them straight to pulsing without waiting for the numeric extreme cutoff.
+
+**Box 3 — feels-like vs. actual gap** (used for the "feels hotter/colder than actual" reading): the gap threshold needed to flag as notable *shrinks* as the actual temperature gets more extreme in that direction —
+- Feels **colder**: actual 19–23°C needs a >4°C gap; 15–19°C needs ≥3°C; 10–15°C needs ≥2°C; ≤10°C needs only ≥1°C.
+- Feels **hotter**: actual 25–30°C needs ≥3°C gap; 30–35°C needs ≥2°C; >35°C needs only ≥1°C.
+- Escalates to pulsing red/blue under the same ≥35°C / <10°C actual-temperature rule as Box 1 above; otherwise solid.
+
+**Box 3 — other extreme thresholds:** wind gust ≥ 60 km/h · rain intensity reported as "extreme" AND rain rate > 0 · lightning ≥ 10 strikes in the last hour · UV index ≥ 11. All pulse red when triggered. Rain (non-extreme, just currently active) shows solid teal; lightning (non-extreme, just currently active) shows solid amber — these two have no "extreme-only" variant of their base color, they either show their accent color or don't show at all.
+
+**Multi-extreme border:** if 2 or more of the 6 extreme flags (feels-colder, feels-hotter, high wind, rain, lightning, UV) are true at once, Box 3's whole border pulses amber as an additional "multiple things going on" signal, on top of whichever single reading is currently selected.
 
 ## Theming
 
