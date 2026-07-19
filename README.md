@@ -87,14 +87,14 @@ place_name: "YOUR HOUSE NAME"
 
 `entity` defaults to `sensor.dash4_weather_card` if omitted (matching this package's sensor name — only change it if you renamed the sensor). `uv_entity` has no safe default — set it to your own station's UV sensor, or leave it unset if you don't want the UV reading. `place_name` defaults to `"MY HOME"` if omitted.
 
-## Numeral colors, thresholds & pulsing
+## Numeral colours, thresholds & pulsing
 
-Box 1 (temperature) and Box 3 (whichever reading is showing) can each render in one of three states: **neutral** (default color), **solid accent color** (a condition worth noting), or **pulsing accent color** (a genuine extreme). The exact triggers:
+Box 1 (temperature) and Box 3 (whichever reading is showing) can each render in one of three states: **neutral** (default colour), **solid accent colour** (a condition worth noting), or **pulsing accent colour** (a genuine extreme). The exact triggers:
 
 **→ See [`docs/box3-guide.md`](docs/box3-guide.md) for the full priority order Box 3 uses to pick *which* reading wins when several of the conditions below are active at once, laid out as a flowchart.**
 
 **Box 1 — actual temperature:**
-| Range | Color | Pulsing? |
+| Range | Colour | Pulsing? |
 |---|---|---|
 | ≥ 35°C | Red | Always |
 | 30–34.9°C | Red | Only if a matching BOM heat warning is active; otherwise solid |
@@ -109,13 +109,13 @@ The temperature value itself always prefers your **local WeatherFlow station** �
 - Feels **hotter**: actual 25–30°C needs ≥3°C gap; 30–35°C needs ≥2°C; >35°C needs only ≥1°C.
 - Escalates to pulsing red/blue under the same ≥35°C / <10°C actual-temperature rule as Box 1 above; otherwise solid.
 
-**Box 3 — other extreme thresholds:** wind gust ≥ 60 km/h · rain intensity reported as "extreme" AND rain rate > 0 · lightning ≥ 10 strikes in the last hour · UV index ≥ 11. All pulse red when triggered. Rain (non-extreme, just currently active) shows solid teal; lightning (non-extreme, just currently active) shows solid amber — these two have no "extreme-only" variant of their base color, they either show their accent color or don't show at all.
+**Box 3 — other extreme thresholds:** wind gust ≥ 60 km/h · rain intensity reported as "extreme" AND rain rate > 0 · lightning ≥ 10 strikes in the last hour · UV index ≥ 11. All pulse red when triggered. Rain (non-extreme, just currently active) shows solid teal; lightning (non-extreme, just currently active) shows solid amber — these two have no "extreme-only" variant of their base colour, they either show their accent colour or don't show at all.
 
 **Multi-extreme border:** if 2 or more of the 6 extreme flags (feels-colder, feels-hotter, high wind, rain, lightning, UV) are true at once, Box 3's whole border pulses amber as an additional "multiple things going on" signal, on top of whichever single reading is currently selected.
 
 ## Theming
 
-The card's base layout (background, blur, text colors, dividers) follows your active Home Assistant theme automatically via standard HA CSS variables. The accent colors (rain teal, lightning amber, hot/cold red/blue, and the hourly graph's line/area) are fixed, not theme-derived — a deliberate design choice, not a bug.
+The card's base layout (background, blur, text colours, dividers) follows your active Home Assistant theme automatically via standard HA CSS variables. The accent colours (rain teal, lightning amber, hot/cold red/blue, and the hourly graph's line/area) are fixed, not theme-derived — a deliberate design choice, not a bug.
 
 ## Notes
 
