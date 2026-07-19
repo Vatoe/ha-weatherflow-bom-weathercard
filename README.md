@@ -14,6 +14,8 @@ Live temperature and humidity from your WeatherFlow station, falling back to BOM
 
 Box 3 automatically shows whichever condition is most relevant right now, in priority order — a genuine extreme (high wind gust, extreme rain, extreme lightning, extreme UV, or a large feels-like gap) always outranks a merely-active non-extreme condition, which in turn outranks the wind/feels-like default. Extremes get a pulsing indicator. Like boxes 1/2, this recomputes reactively whenever the underlying condition changes — it isn't on a timer.
 
+**→ See [`docs/box3-guide.md`](docs/box3-guide.md) for the full priority flowchart, every metric's exact trigger thresholds, and how the colour/pulse rules work.**
+
 ![Rain reading](images/card-box3-rain.png)
 
 **Tap Box 3** to manually cycle through readings instead: **wind → rain → lightning → UV → feels-like → wind → ...**. Wind and feels-like are always available to tap to; rain, lightning, and UV are automatically **skipped from the cycle whenever their value is currently inactive/zero** (e.g. no lightning strikes right now), so a tap never lands you on an empty "0" reading. A manual selection reverts to auto after 1 minute of inactivity, on a **double tap**, or immediately if a genuinely new condition becomes active while you're viewing a manual pin.
