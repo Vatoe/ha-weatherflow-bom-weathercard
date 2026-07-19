@@ -91,16 +91,17 @@ place_name: "YOUR HOUSE NAME"
 
 Box 1 (temperature) and Box 3 (whichever reading is showing) can each render in one of three states: **neutral** (default colour), **solid accent colour** (a condition worth noting), or **pulsing accent colour** (a genuine extreme). The exact triggers:
 
-**Box 1 — actual temperature:**
+**Box 1 — actual temperature** (the same thresholds also drive Box 3's feels-like numeral colour, described further down — they share one set of tiers):
 | Range | Colour | Pulsing? |
 |---|---|---|
 | ≥ 35°C | Red | Always |
 | 30–34.9°C | Red | Only if a matching BOM heat warning is active; otherwise solid |
-| 14–29.9°C | (neutral) | — |
+| 27–29.9°C | Amber | Never — no pulsing variant at all for this tier |
+| 14–26.9°C | (neutral) | — |
 | 10–13.9°C | Blue | Only if a matching BOM frost/grazier/cold warning is active; otherwise solid |
 | < 10°C | Blue | Always |
 
-The temperature value itself always prefers your **local WeatherFlow station** — BOM only supplies the number when the station is offline (see Box 1/Box 2 above). The 30–34.9°C / 10–13.9°C bands are a deliberate "not quite extreme yet" tier, and the BOM-warning check that can escalate them to pulsing is a **separate, independent lookup** (BOM's own severe-weather-warnings feed) — it runs the same way regardless of whether the current temperature came from the station or from BOM fallback, it is not conditional on the station being offline. So the expected, correct behavior in *either* case (station online or offline) is: pulsing only when a genuine official warning is active; solid otherwise. A station outage with no matching BOM warning correctly shows solid, not pulsing — that's intended, not a gap.
+The temperature value itself always prefers your **local WeatherFlow station** — BOM only supplies the number when the station is offline (see Box 1/Box 2 above). The 30–34.9°C / 10–13.9°C bands are a deliberate "not quite extreme yet" tier, and the BOM-warning check that can escalate them to pulsing is a **separate, independent lookup** (BOM's own severe-weather-warnings feed) — it runs the same way regardless of whether the current temperature came from the station or from BOM fallback, it is not conditional on the station being offline. So the expected, correct behavior in *either* case (station online or offline) is: pulsing only when a genuine official warning is active; solid otherwise. A station outage with no matching BOM warning correctly shows solid, not pulsing — that's intended, not a gap. The 27–29.9°C amber band sits one step below that — a "getting warm, worth a glance" cue that can never escalate to pulsing regardless of any active BOM warning, hot side only (no cold-side equivalent yet).
 
 **→ See [`docs/box3-guide.md`](docs/box3-guide.md) for the full priority order Box 3 uses to pick *which* reading wins when several of the conditions below are active at once, laid out as a flowchart.**
 

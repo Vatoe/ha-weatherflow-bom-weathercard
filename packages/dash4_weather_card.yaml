@@ -17,11 +17,13 @@ template:
             {% set t = tempest_t if tempest_t != 999 else (state_attr(('weather.' ~ bom), 'temperature') | float(999)) %}
             {# BOM warning escalation (added 2026-07-18): a matching BOM warning upgrades an
                already-solid hot/cold tier straight to pulsing - it never colors an otherwise-
-               neutral (14-29.9°C) reading. BOM's own heatwave severity service is a separate
-               product from this per-area warnings feed, so the 'heat' match is opportunistic
-               (may rarely fire); 'frost'/'grazier'/'cold' reliably catches real Sheep Graziers/
-               frost warnings for this region. Keep this block in sync with readings/feels_cls
-               below if the keyword list changes - can't share {% set %} scope across attributes. #}
+               neutral (14-26.9°C) reading, and never touches the amber "notable" tier
+               (27-29.9°C, added 2026-07-19) either - that tier has no pulsing variant at all,
+               warning or not. BOM's own heatwave severity service is a separate product from
+               this per-area warnings feed, so the 'heat' match is opportunistic (may rarely
+               fire); 'frost'/'grazier'/'cold' reliably catches real Sheep Graziers/frost
+               warnings for this region. Keep this block in sync with readings/feels_cls below
+               if the keyword list changes - can't share {% set %} scope across attributes. #}
             {% set bom_warnings = state_attr(('sensor.' ~ bom ~ '_warnings'), 'warnings') or [] %}
             {% set ns = namespace(heat=false, cold=false) %}
             {% for w in bom_warnings %}
@@ -31,6 +33,7 @@ template:
             {% endfor %}
             {% if t != 999 and t >= 35 %}high-temp-extreme
             {%- elif t != 999 and t >= 30 %}{{ 'high-temp-extreme' if ns.heat else 'high-temp' }}
+            {%- elif t != 999 and t >= 27 %}high-temp-notable
             {%- elif t != 999 and t < 10 %}low-temp-extreme
             {%- elif t != 999 and t < 14 %}{{ 'low-temp-extreme' if ns.cold else 'low-temp' }}
             {%- else %}neutral
@@ -66,12 +69,15 @@ template:
             {% set uv_rating = 'Low' if uv < 3 else 'Moderate' if uv < 6 else 'High' if uv < 8 else 'Very High' if uv < 11 else 'Extreme' %}
             {% set feels_str = (('%.1f' | format(feels)) ~ '°') if feels != 999 else '--' %}
             {% set actual_str = (('%.1f' | format(actual)) ~ '°C') if actual != 999 else '--' %}
-            {# Box-3 feels-like numeral color tier - same 4 thresholds as box1_border above
-               (10/14 cold, 30/35 hot), applied to the feels-like value itself so coloring
-               reflects the number shown regardless of which narrative (feels_like/feels_colder/
-               feels_hotter) selected it. Keep in sync with box1_border if thresholds change.
-               Same BOM-warning escalation as box1_border - see that block's comment for why
-               'heat' is opportunistic and 'frost'/'grazier'/'cold' is the reliable one. #}
+            {# Box-3 feels-like numeral color tier - same thresholds as box1_border above
+               (10/14 cold, 27/30/35 hot - amber "notable" 27-29.9°C tier added 2026-07-19,
+               hot side only, no cold-side equivalent yet), applied to the feels-like value
+               itself so coloring reflects the number shown regardless of which narrative
+               (feels_like/feels_colder/feels_hotter) selected it. Keep in sync with
+               box1_border if thresholds change. Same BOM-warning escalation as box1_border
+               - see that block's comment for why 'heat' is opportunistic and
+               'frost'/'grazier'/'cold' is the reliable one; the amber tier has no pulsing
+               variant, warning or not. #}
             {% set bom_warnings = state_attr(('sensor.' ~ bom ~ '_warnings'), 'warnings') or [] %}
             {% set ns = namespace(heat=false, cold=false) %}
             {% for w in bom_warnings %}
@@ -81,6 +87,7 @@ template:
             {% endfor %}
             {% set feels_cls = 'feels-hotter-extreme' if feels != 999 and feels >= 35
               else ('feels-hotter-extreme' if ns.heat else 'feels-hotter') if feels != 999 and feels >= 30
+              else 'feels-hotter-notable' if feels != 999 and feels >= 27
               else 'feels-colder-extreme' if feels != 999 and feels < 10
               else ('feels-colder-extreme' if ns.cold else 'feels-colder') if feels != 999 and feels < 14
               else '' %}

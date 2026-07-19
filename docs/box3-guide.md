@@ -46,10 +46,24 @@ non-extreme elevated wind reading you'd tap to it manually.
 |---|---|---|---|---|
 | Wind | *(none — see note above)* | Gust ≥ 60 km/h | — | 🔴 Red, pulsing |
 | Feels Colder | *(same as extreme — single threshold)* | Gap below actual temp exceeds a sliding scale (see below) | — | 🔵 Blue (pulses only if actual < 10°C) |
-| Feels Hotter | *(same as extreme — single threshold)* | Gap above actual temp exceeds a sliding scale (see below) | — | 🔴 Red (pulses only if actual ≥ 35°C) |
+| Feels Hotter | *(same as extreme — single threshold)* | Gap above actual temp exceeds a sliding scale (see below) | — | 🟠 Amber at 27–29.9°C, then 🔴 Red from 30°C (pulses only if actual ≥ 35°C) — see note below |
 | Rain | Any measurable rain (rate > 0 with a real intensity descriptor) | WeatherFlow's own "Extreme" intensity descriptor | 🟦 Teal | 🔴 Red, pulsing |
 | Lightning | ≥ 1 strike in the last hour | ≥ 10 strikes in the last hour | 🟠 Amber | 🔴 Red, pulsing |
 | UV | *(same as extreme — single threshold)* | Index ≥ 11 (standard "Extreme" UV rating) | — | 🔴 Red, pulsing |
+
+**Two separate things use similar-sounding thresholds for Feels Colder/Hotter
+— don't conflate them.** The sliding-scale gap table just below decides
+*whether Box 3 auto-selects* a Feels Colder/Hotter reading at all (a
+priority-cascade decision, covered by this whole guide). Completely
+separately, once a Feels Colder/Hotter reading **is** showing (auto-selected
+or manually tapped to), its number is coloured using the *actual/feels-like
+temperature's own value* against a fixed set of bands (added 2026-07-19: an
+amber "notable" tier at 27–29.9°C now sits between neutral and the existing
+solid-red 30–34.9°C tier) — see the main README's "Numeral colours,
+thresholds & pulsing" section for that full table. A reading can be
+auto-selected via the gap logic while still rendering in *any* colour
+(including neutral) depending on where the raw number itself happens to
+land — the two systems don't share thresholds or logic.
 
 **Feels Colder/Hotter's sliding-scale gap** — the colder or hotter it already
 is, the smaller an extra gap counts as "notable" (a 1° chill matters more at
