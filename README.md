@@ -91,6 +91,8 @@ place_name: "YOUR HOUSE NAME"
 
 Box 1 (temperature) and Box 3 (whichever reading is showing) can each render in one of three states: **neutral** (default color), **solid accent color** (a condition worth noting), or **pulsing accent color** (a genuine extreme). The exact triggers:
 
+**→ See [`docs/box3-guide.md`](docs/box3-guide.md) for the full priority order Box 3 uses to pick *which* reading wins when several of the conditions below are active at once, laid out as a flowchart.**
+
 **Box 1 — actual temperature:**
 | Range | Color | Pulsing? |
 |---|---|---|
