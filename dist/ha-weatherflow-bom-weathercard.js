@@ -7,7 +7,7 @@ const ICON_MAP = {
   'sunny': '☀️', 'night': '🌙', 'cloudy': '☁️',
   'partly-cloudy': '⛅', 'pouring': '🌧️', 'rainy': '🌦️',
   'lightning': '⚡', 'lightning-rainy': '⛈️', 'snowy': '❄️',
-  'snowy-rainy': '🌨️', 'fog': '🌪️', 'hail': '🧊',
+  'snowy-rainy': '🌨️', 'fog': '🌫️', 'hail': '🧊',
   'windy': '💨', 'windy-variant': '💨', 'mdi:alert-circle-outline': '⚠️',
 };
 
