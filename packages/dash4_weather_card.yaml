@@ -91,19 +91,19 @@ template:
               else 'feels-colder-extreme' if feels != 999 and feels < 10
               else ('feels-colder-extreme' if ns.cold else 'feels-colder') if feels != 999 and feels < 14
               else '' %}
-            {# Live gusting check (no hold/debounce - reflects the current reading only,
-               reverts the moment the next station update reports a lower value). Lowered
-               25km/h -> 20km/h 2026-07-19: 25 was chosen from one night's percentile data
-               (normal breezy conditions sit high-teens/low-20s) and tracked "statistically
-               unusual for this station" rather than "feels blowy" - confirmed live
-               2026-07-19 that 14-20km/h gusts already read as genuinely blowy in person
-               (Beaufort Force 3/gentle breeze - leaves/twigs in constant motion - matches
-               the Force 3->4 boundary where wind starts to feel noteworthy to most people).
-               Folded into the existing 'wind' reading rather than a separate competing
-               priority entry - it's just richer content for the same reading, not a new
-               mode. #}
+            {# Gusting check redesigned 2026-07-20: the live-instant 14.5km/h compare (no
+               hold/debounce) flickered on/off within minutes even on calm days, since gusty
+               wind is inherently bursty rather than continuously elevated (confirmed via
+               MariaDB history backtest). Now driven by binary_sensor.dash4_wind_gusting:
+               a 30-min rolling ratio (sensor.dash4_wind_gust_ratio_30m, history_stats) with
+               hysteresis (enters at ratio>=40%, exits at ratio<=20%). The 14.5km/h threshold
+               itself (Beaufort Force 4, set 2026-07-19) still defines what counts as a
+               'notable' individual gust reading feeding that ratio - only the on/off DECISION
+               for the label is now smoothed, not the threshold value. Folded into the
+               existing 'wind' reading rather than a separate competing priority entry - it's
+               just richer content for the same reading, not a new mode. #}
             {% set gust = states(('sensor.' ~ wf ~ '_wind_gust')) | float(0) %}
-            {% set gusting = gust >= 20 %}
+            {% set gusting = is_state('binary_sensor.dash4_wind_gusting', 'on') %}
             {{ {
               'wind': {
                 'label': ('Gusting' if gusting else 'Wind'),
@@ -238,7 +238,7 @@ template:
                boundary, so between midnight and the next reissue index 0 can still be
                holding yesterday's now-stale data while index 1 has quietly become today.
                A naive "index 0 = Today" label would misreport every row by one day during
-               that ~5.5hr window every night. #}
+               that ~5.5hr window every night. This is the DASH-4-specific fix, found 2026-07-17. #}
             {% set bom = states('input_text.dash4_bom_prefix') %}
             {% set icons = state_attr('sensor.dash4_forecast_icons', 'icons') | default(['mdi:weather-cloudy']*5, true) %}
             {% set hourly_today = state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_today') | default([], true) %}
@@ -308,12 +308,20 @@ template:
               {% set line2 = ('+' ~ extra ~ ' more active warning' ~ ('s' if extra > 1 else '')) if extra > 0 else '' %}
               {{ {'line1': ns.titles[0], 'line2': line2, 'is_warning': true, 'titles': ns.titles} }}
             {%- else %}
-              {{ {'line1': states(('sensor.' ~ bom ~ '_short_text_0')), 'line2': '', 'is_warning': false, 'titles': []} }}
+              {% set extended = states(('sensor.' ~ bom ~ '_extended_text_0')) %}
+              {% set fallback_text = extended if extended not in ['unavailable', 'unknown', ''] else states(('sensor.' ~ bom ~ '_short_text_0')) %}
+              {{ {'line1': fallback_text, 'line2': '', 'is_warning': false, 'titles': []} }}
             {%- endif %}
           # Note: card_title_html/forecast_table_html/alert_lines_html (pre-rendered
           # HTML for the abandoned markdown-card architecture) were removed 2026-07-17 —
           # the live card is a standalone www/ page that reads box1_temp/box2_humidity/
           # box3_display/forecast_rows/alert_lines directly and renders client-side.
+    binary_sensor:
+      - name: "Dash4 Wind Gust Notable"
+        unique_id: dash4_wind_gust_notable
+        state: >-
+          {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+          {{ states(('sensor.' ~ wf ~ '_wind_gust')) | float(0) >= 14.5 }}
   - trigger:
       - trigger: time_pattern
         minutes: "/5"
@@ -401,3 +409,35 @@ template:
               {% endif %}
             {% endfor %}
             {{ ns.out }}
+  - trigger:
+      - trigger: state
+        entity_id: sensor.dash4_wind_gust_ratio_30m
+      - trigger: time_pattern
+        minutes: "/5"
+    binary_sensor:
+      - name: "Dash4 Wind Gusting"
+        unique_id: dash4_wind_gusting
+        state: >-
+          {# Hysteresis on the 30-min rolling gust ratio (sensor.dash4_wind_gust_ratio_30m):
+             enters 'gusting' at ratio>=40%, only exits at ratio<=20%, holds between - avoids
+             the label flickering as the ratio drifts near a single cutoff. Time_pattern
+             trigger is a staleness backstop (trigger-based sensors reset to unknown on
+             template.reload, not just restart), not just the ratio sensor's own state trigger. #}
+          {% set ratio = states('sensor.dash4_wind_gust_ratio_30m') | float(0) %}
+          {% set was_on = this.state == 'on' %}
+          {% if was_on %}
+            {{ ratio > 20 }}
+          {% else %}
+            {{ ratio >= 40 }}
+          {% endif %}
+
+sensor:
+  - platform: history_stats
+    name: "Dash4 Wind Gust Ratio 30m"
+    unique_id: dash4_wind_gust_ratio_30m
+    entity_id: binary_sensor.dash4_wind_gust_notable
+    state: "on"
+    type: ratio
+    end: "{{ now() }}"
+    duration:
+      minutes: 30

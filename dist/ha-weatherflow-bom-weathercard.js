@@ -222,6 +222,35 @@ function attachTapSwipeGuard(el, onTap) {
   });
 }
 
+// Splits BOM's extended-forecast paragraph into whole sentences on '. '
+// boundaries, keeping the trailing period on every piece except a possible
+// final fragment with no terminal period. Used by _fitFallbackForecastText
+// so the 2-line trim never cuts mid-sentence.
+function splitIntoSentences(text) {
+  const parts = String(text || '').split(/(?<=\. )/);
+  return parts.map(p => p.trim()).filter(p => p.length > 0);
+}
+
+// Last-resort trim for a single sentence that alone overflows the 2-line
+// budget (rare - BOM extended-text sentences are normally well under 2 lines
+// each). Grows the text word-by-word against the real rendered element,
+// stopping one word before it would overflow, and appends an ellipsis.
+function truncateToLines(sentence, el, maxHeight) {
+  const words = sentence.split(' ');
+  let fitted = '';
+  for (const word of words) {
+    const candidate = fitted ? `${fitted} ${word}` : word;
+    el.textContent = `${candidate}…`;
+    if (el.scrollHeight > maxHeight) {
+      el.textContent = fitted ? `${fitted}…` : `${word}…`;
+      return el.textContent;
+    }
+    fitted = candidate;
+  }
+  el.textContent = fitted;
+  return fitted;
+}
+
 class Dash4WeatherCard extends HTMLElement {
   constructor() {
     super();
@@ -335,6 +364,40 @@ class Dash4WeatherCard extends HTMLElement {
     timeEl.textContent = `${h}:${m} ${ampm}`;
   }
 
+  // Fits the no-warning fallback box's text (BOM extended_text_0, set as
+  // data-full-text on .l1 by _render()) to a 2-line budget, trimming on
+  // whole-sentence boundaries so it never cuts mid-word. No-ops entirely
+  // for the active-warning case (that .l1 has no data-full-text attribute).
+  // Runs after every _render() since alert text can change on any hass update.
+  _fitFallbackForecastText() {
+    const l1El = this.shadowRoot.querySelector('.alert-lines:not(.warning) .l1');
+    if (!l1El) return;
+    const fullText = l1El.dataset.fullText;
+    if (!fullText) return;
+    const computed = getComputedStyle(l1El);
+    const lineHeight = parseFloat(computed.lineHeight) || (parseFloat(computed.fontSize) * 1.2);
+    const maxHeight = lineHeight * 2 + 1;
+    l1El.style.maxHeight = `${maxHeight}px`;
+    l1El.style.overflow = 'hidden';
+    if (l1El.scrollHeight <= maxHeight) return;
+    const sentences = splitIntoSentences(fullText);
+    let fitted = '';
+    for (const sentence of sentences) {
+      const candidate = fitted ? `${fitted} ${sentence}` : sentence;
+      l1El.textContent = candidate;
+      if (l1El.scrollHeight > maxHeight) {
+        if (!fitted) {
+          truncateToLines(sentence, l1El, maxHeight);
+        } else {
+          l1El.textContent = fitted;
+        }
+        return;
+      }
+      fitted = candidate;
+    }
+    l1El.textContent = fitted;
+  }
+
   _render() {
     if (!this._hass) {
       this.shadowRoot.innerHTML = `<style>${STYLE}</style><div class="card"><div class="title-line">Loading&hellip;</div></div>`;
@@ -437,12 +500,13 @@ class Dash4WeatherCard extends HTMLElement {
 
         ${alertShow ? `
         <div class="alert-lines${alert.is_warning ? ' warning' : ''}${alertCyclable ? ' tappable' : ''}">
-          <div class="l1">${escapeHtml(alertLine1 || '')}${alertCyclable ? ` <span class="count-inline">${escapeHtml(alertLine2)}</span>` : ''}</div>
+          <div class="l1"${!alert.is_warning ? ` data-full-text="${escapeHtml(alertLine1 || '')}"` : ''}>${escapeHtml(alertLine1 || '')}${alertCyclable ? ` <span class="count-inline">${escapeHtml(alertLine2)}</span>` : ''}</div>
           ${(!alertCyclable && alertLine2) ? `<div class="l2">${escapeHtml(alertLine2)}</div>` : ''}
         </div>` : ''}
       </div>
     `;
     this._renderTitleOnly();
+    this._fitFallbackForecastText();
 
     if (alertCyclable) {
       const alertEl = this.shadowRoot.querySelector('.alert-lines');
