@@ -33,7 +33,7 @@ const STYLE = `
   .title-divider { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .title-divider .rule { flex: 1; height: 1px; background: var(--divider-color); }
   .title-divider .dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(150,150,150,0.85); flex-shrink: 0; }
-  .title-line .place { font-size: 10px; font-weight: 300; letter-spacing: 0.8px; text-transform: uppercase; color: var(--primary-text-color); white-space: nowrap; }
+  .title-line .place { font-size: 15px; font-weight: 300; letter-spacing: 1.6px; text-transform: uppercase; color: var(--primary-text-color); white-space: nowrap; }
   .title-line .date, .title-line .time { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
   .title-line .date { font-weight: 300; color: var(--primary-text-color); }
   .title-line .time { font-weight: 900; color: var(--primary-text-color); }
