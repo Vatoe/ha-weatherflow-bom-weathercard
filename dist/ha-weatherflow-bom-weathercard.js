@@ -4,11 +4,11 @@
 // (unlike the old iframe version, which had to run in an isolated browsing context).
 
 const ICON_MAP = {
-  'sunny': '☀️', 'clear-night': '🌙', 'cloudy': '☁️',
-  'partlycloudy': '⛅', 'pouring': '🌧️', 'rainy': '🌦️',
+  'sunny': '☀️', 'night': '🌙', 'cloudy': '☁️',
+  'partly-cloudy': '⛅', 'pouring': '🌧️', 'rainy': '🌦️',
   'lightning': '⚡', 'lightning-rainy': '⛈️', 'snowy': '❄️',
   'snowy-rainy': '🌨️', 'fog': '🌫️', 'hail': '🧊',
-  'windy': '💨', 'windy-variant': '💨', 'exceptional': '⚠️',
+  'windy': '💨', 'windy-variant': '💨', 'mdi:alert-circle-outline': '⚠️',
 };
 
 const STYLE = `
