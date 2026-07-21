@@ -81,7 +81,8 @@ const STYLE = `
 
   .alert-lines { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 5px 12px; border-left: 3px solid #66D4CF; }
   .alert-lines.warning { border-left-color: #FF453A; }
-  .alert-lines .l1 { font-size: 13.5px; font-weight: 500; color: var(--primary-text-color); }
+  .alert-lines .l1 { font-size: 13.5px; font-weight: 400; color: var(--primary-text-color); }
+  .alert-lines.warning .l1 { font-weight: 500; }
   .alert-lines .l2 { font-size: 12px; color: var(--secondary-text-color); margin-top: 2px; }
   .alert-lines .count-inline { font-size: 12px; color: var(--secondary-text-color); font-weight: 400; white-space: nowrap; }
   .alert-lines.tappable { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
