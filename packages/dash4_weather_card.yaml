@@ -153,12 +153,14 @@ template:
             {% set feels = states(('sensor.' ~ wf ~ '_feels_like_temperature')) | float(999) %}
             {% set gap = (feels - actual) if (actual != 999 and feels != 999) else 0 %}
             {% set cold_flag = gap < 0 and (
+              (actual > 23 and actual <= 25 and -gap >= 4) or
               (actual > 19 and actual <= 23 and -gap > 4) or
               (actual > 15 and actual <= 19 and -gap >= 3) or
-              (actual > 10 and actual <= 15 and -gap >= 2) or
-              (actual <= 10 and -gap >= 1)
+              (actual > 12 and actual <= 15 and -gap >= 2) or
+              (actual <= 12 and -gap >= 1)
             ) %}
             {% set hot_flag = gap > 0 and (
+              (actual > 23 and actual <= 25 and gap >= 4) or
               (actual > 25 and actual <= 30 and gap >= 3) or
               (actual > 30 and actual <= 35 and gap >= 2) or
               (actual > 35 and gap >= 1)
@@ -211,12 +213,14 @@ template:
             {% set feels = states(('sensor.' ~ wf ~ '_feels_like_temperature')) | float(999) %}
             {% set gap = (feels - actual) if (actual != 999 and feels != 999) else 0 %}
             {% set cold_flag = gap < 0 and (
+              (actual > 23 and actual <= 25 and -gap >= 4) or
               (actual > 19 and actual <= 23 and -gap > 4) or
               (actual > 15 and actual <= 19 and -gap >= 3) or
-              (actual > 10 and actual <= 15 and -gap >= 2) or
-              (actual <= 10 and -gap >= 1)
+              (actual > 12 and actual <= 15 and -gap >= 2) or
+              (actual <= 12 and -gap >= 1)
             ) %}
             {% set hot_flag = gap > 0 and (
+              (actual > 23 and actual <= 25 and gap >= 4) or
               (actual > 25 and actual <= 30 and gap >= 3) or
               (actual > 30 and actual <= 35 and gap >= 2) or
               (actual > 35 and gap >= 1)
