@@ -35,7 +35,8 @@ template:
             {%- elif t != 999 and t >= 30 %}{{ 'high-temp-extreme' if ns.heat else 'high-temp' }}
             {%- elif t != 999 and t >= 27 %}high-temp-notable
             {%- elif t != 999 and t < 10 %}low-temp-extreme
-            {%- elif t != 999 and t < 14 %}{{ 'low-temp-extreme' if ns.cold else 'low-temp' }}
+            {%- elif t != 999 and t < 13 %}{{ 'low-temp-extreme' if ns.cold else 'low-temp' }}
+            {%- elif t != 999 and t <= 15 %}low-temp-teal
             {%- else %}neutral
             {%- endif %}
           box2_humidity: >-
@@ -44,6 +45,12 @@ template:
             {% set tempest_h = states(('sensor.' ~ wf ~ '_humidity')) %}
             {% set h = (tempest_h | int) if tempest_h not in ['unavailable', 'unknown'] else (state_attr(('weather.' ~ bom), 'humidity') | int(999)) %}
             {{ (h ~ '%') if h != 999 else '--' }}
+          temp_entity_id: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {{ 'sensor.' ~ wf ~ '_temperature' }}
+          humidity_entity_id: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {{ 'sensor.' ~ wf ~ '_humidity' }}
           readings: >-
             {% set wf = states('input_text.dash4_weatherflow_prefix') %}
             {% set bom = states('input_text.dash4_bom_prefix') %}
@@ -89,7 +96,8 @@ template:
               else ('feels-hotter-extreme' if ns.heat else 'feels-hotter') if feels != 999 and feels >= 30
               else 'feels-hotter-notable' if feels != 999 and feels >= 27
               else 'feels-colder-extreme' if feels != 999 and feels < 10
-              else ('feels-colder-extreme' if ns.cold else 'feels-colder') if feels != 999 and feels < 14
+              else ('feels-colder-extreme' if ns.cold else 'feels-colder') if feels != 999 and feels < 13
+              else 'feels-colder-teal' if feels != 999 and feels <= 15
               else '' %}
             {# Gusting check redesigned 2026-07-20: the live-instant 14.5km/h compare (no
                hold/debounce) flickered on/off within minutes even on calm days, since gusty
@@ -102,13 +110,15 @@ template:
                for the label is now smoothed, not the threshold value. Folded into the
                existing 'wind' reading rather than a separate competing priority entry - it's
                just richer content for the same reading, not a new mode. #}
-            {% set gust = states(('sensor.' ~ wf ~ '_wind_gust')) | float(0) %}
+            {% set gust_raw = states(('sensor.' ~ wf ~ '_wind_gust')) %}
+            {% set gust_available = gust_raw not in ['unavailable', 'unknown'] %}
+            {% set gust = gust_raw | float(0) %}
             {% set gusting = is_state('binary_sensor.dash4_wind_gusting', 'on') %}
             {{ {
               'wind': {
                 'label': ('Gusting' if gusting else 'Wind'),
                 'value': wind_compass,
-                'sub': ((gust | round(0) | int | string) ~ ' km/h' if gusting else wind_spd_sub),
+                'sub': ((gust | round(0) | int | string) ~ ' km/h' if gusting and gust_available else wind_spd_sub),
                 'cls': ('wind-notable' if gusting else ''),
                 'compact': false
               },
@@ -238,7 +248,8 @@ template:
                boundary, so between midnight and the next reissue index 0 can still be
                holding yesterday's now-stale data while index 1 has quietly become today.
                A naive "index 0 = Today" label would misreport every row by one day during
-               that ~5.5hr window every night. This is the DASH-4-specific fix, found 2026-07-17. #}
+               that ~5.5hr window every night.
+               different sensor pair - this is the DASH-4-specific fix, found 2026-07-17. #}
             {% set bom = states('input_text.dash4_bom_prefix') %}
             {% set icons = state_attr('sensor.dash4_forecast_icons', 'icons') | default(['mdi:weather-cloudy']*5, true) %}
             {% set hourly_today = state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_today') | default([], true) %}
@@ -305,6 +316,23 @@ template:
             {{ state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_today') | default([], true) }}
           hourly_rain_tomorrow: >-
             {{ state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_tomorrow') | default([], true) }}
+          is_raining: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {% set wf_rain = states(('sensor.' ~ wf ~ '_rain_rate')) | float(0) if wf not in ['unknown', 'unavailable', ''] else 0 %}
+            {% if wf_rain > 0 %}{{ true }}
+            {% else %}
+              {% set hourly = state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_today') | default([], true) %}
+              {% set ns = namespace(consecutive=0, heavy=false) %}
+              {% for h in hourly %}
+                {% if h.mm | float(0) >= 5 %}
+                  {% set ns.consecutive = ns.consecutive + 1 %}
+                  {% if ns.consecutive >= 2 %}{% set ns.heavy = true %}{% endif %}
+                {% else %}
+                  {% set ns.consecutive = 0 %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.heavy }}
+            {% endif %}
           alert_lines: >-
             {% set bom = states('input_text.dash4_bom_prefix') %}
             {% set warnings = state_attr(('sensor.' ~ bom ~ '_warnings'), 'warnings') | default([], true) %}
@@ -338,6 +366,18 @@ template:
     binary_sensor:
       - name: "Dash4 Wind Gust Notable"
         unique_id: dash4_wind_gust_notable
+        # availability (added 2026-07-21, final review finding): makes this sensor's own
+        # displayed state honestly reflect a WeatherFlow gust-sensor outage instead of
+        # silently reading "off" via float(0). Does NOT by itself fix ratio dilution in
+        # sensor.dash4_wind_gust_ratio_30m (history_stats) - history_stats counts
+        # "unavailable" history the same as "off" toward its fixed 30-min denominator,
+        # so a real outage still drags the ratio down during genuinely gusty conditions.
+        # A full fix would mean replacing history_stats with a custom accumulator that
+        # excludes unavailable time from its denominator - not done, tracked as a known,
+        # low-probability, not-urgent gap.
+        availability: >-
+          {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+          {{ states(('sensor.' ~ wf ~ '_wind_gust')) not in ['unavailable', 'unknown'] }}
         state: >-
           {% set wf = states('input_text.dash4_weatherflow_prefix') %}
           {{ states(('sensor.' ~ wf ~ '_wind_gust')) | float(0) >= 14.5 }}
@@ -409,7 +449,7 @@ template:
                 {% set hour12 = dt.hour if dt.hour <= 12 else dt.hour - 12 %}
                 {% set hour12 = 12 if hour12 == 0 else hour12 %}
                 {% set ampm = 'am' if dt.hour < 12 else 'pm' %}
-                {% set ns.out = ns.out + [{'time': (hour12 | string) ~ ampm, 'prob': (f.precipitation_probability | default(0) | int), 'mm': (f.precipitation | default(0) | float)}] %}
+                {% set ns.out = ns.out + [{'time': (hour12 | string) ~ ampm, 'temp': (f.temperature | default(0) | float), 'prob': (f.precipitation_probability | default(0) | int), 'mm': (f.precipitation | default(0) | float)}] %}
               {% endif %}
             {% endfor %}
             {{ ns.out }}
@@ -424,10 +464,26 @@ template:
                 {% set hour12 = dt.hour if dt.hour <= 12 else dt.hour - 12 %}
                 {% set hour12 = 12 if hour12 == 0 else hour12 %}
                 {% set ampm = 'am' if dt.hour < 12 else 'pm' %}
-                {% set ns.out = ns.out + [{'time': (hour12 | string) ~ ampm, 'prob': (f.precipitation_probability | default(0) | int), 'mm': (f.precipitation | default(0) | float)}] %}
+                {% set ns.out = ns.out + [{'time': (hour12 | string) ~ ampm, 'temp': (f.temperature | default(0) | float), 'prob': (f.precipitation_probability | default(0) | int), 'mm': (f.precipitation | default(0) | float)}] %}
               {% endif %}
             {% endfor %}
             {{ ns.out }}
+  - trigger:
+      - trigger: homeassistant
+        event: start
+    sensor:
+      - name: "Dash4 HA Start Marker"
+        unique_id: dash4_ha_start_marker
+        state: "{{ now().isoformat() }}"
+        # Warm-up marker for binary_sensor.dash4_wind_gusting's post-restart guard.
+        # Deliberately a trigger-based sensor, not an input_datetime: trigger-based
+        # sensors reset to 'unknown' on every restart until their trigger actually
+        # fires (same property noted below re: template.reload), so there is no
+        # stale leftover value from a previous restart to race against - the guard
+        # below defaults to the SAFE (not-warmed-up) state during any startup race,
+        # rather than an input_datetime's persisted-across-restart value defaulting
+        # to the UNSAFE (warmed-up) state. Found via re-review 2026-07-21 after an
+        # input_datetime-based first attempt had exactly that race.
   - trigger:
       - trigger: state
         entity_id: sensor.dash4_wind_gust_ratio_30m
@@ -441,11 +497,21 @@ template:
              enters 'gusting' at ratio>=40%, only exits at ratio<=20%, holds between - avoids
              the label flickering as the ratio drifts near a single cutoff. Time_pattern
              trigger is a staleness backstop (trigger-based sensors reset to unknown on
-             template.reload, not just restart), not just the ratio sensor's own state trigger. #}
+             template.reload, not just restart), not just the ratio sensor's own state trigger.
+             Warm-up guard (added 2026-07-21, final review finding): history_stats' 30-min
+             window isn't fully populated for the first 30 min after a restart, so the ratio
+             can read artificially high on incomplete history - block ENTRY (not exit) into
+             'gusting' until sensor.dash4_ha_start_marker (a trigger-based sensor set on
+             homeassistant start, see its own comment above) shows 30+ real minutes have
+             elapsed. #}
           {% set ratio = states('sensor.dash4_wind_gust_ratio_30m') | float(0) %}
           {% set was_on = this.state == 'on' %}
+          {% set boot_time = states('sensor.dash4_ha_start_marker') %}
+          {% set warmed_up = boot_time not in ['unknown', 'unavailable', ''] and (now().timestamp() - as_timestamp(boot_time)) >= 1800 %}
           {% if was_on %}
             {{ ratio > 20 }}
+          {% elif not warmed_up %}
+            false
           {% else %}
             {{ ratio >= 40 }}
           {% endif %}

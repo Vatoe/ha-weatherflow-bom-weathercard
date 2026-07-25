@@ -30,9 +30,8 @@ const STYLE = `
     padding: 0 2px 5px; margin-bottom: 1px;
   }
   .title-line .tsep { font-size: 14px; font-weight: 300; color: var(--secondary-text-color); }
-  .title-divider { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .title-divider .rule { flex: 1; height: 1px; background: var(--divider-color); }
-  .title-divider .dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(150,150,150,0.85); flex-shrink: 0; }
+  .title-divider { display: flex; align-items: center; margin-bottom: 18px; }
+  .title-divider .rule { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.16) 16%, rgba(255,255,255,0.16) 84%, rgba(255,255,255,0) 100%); }
   .title-line .place { font-size: 15px; font-weight: 300; letter-spacing: 1.6px; text-transform: uppercase; color: var(--primary-text-color); white-space: nowrap; }
   .title-line .date, .title-line .time { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
   .title-line .date { font-weight: 300; color: var(--primary-text-color); }
@@ -48,6 +47,8 @@ const STYLE = `
 
   .box3.tappable { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
   .box3.tappable:active { transform: scale(0.97); transition: transform 0.08s; }
+  .box1.tappable, .box2.tappable { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .box1.tappable:active, .box2.tappable:active { transform: scale(0.97); transition: transform 0.08s; }
 
   .box3.rain .value { color: #66D4CF; }
   .box3.lightning .value, .box3.wind-notable .value { color: #FF9F0A; }
@@ -63,6 +64,7 @@ const STYLE = `
     color: #0A84FF; animation: text-pulse-blue 4s ease-in-out infinite;
   }
   .box.low-temp .value, .box3.feels-colder .value { color: #0A84FF; }
+  .box.low-temp-teal .value, .box3.feels-colder-teal .value { color: #66D4CF; }
   @keyframes text-pulse-blue { 0%,100% { color: rgba(10,132,255,0.55); } 50% { color: rgba(10,132,255,1); } }
 
   .box3.multi-extreme { border-color: rgba(255,159,10,0.55); animation: border-pulse-amber 2.5s ease-in-out infinite; }
@@ -133,6 +135,18 @@ const STYLE = `
     padding: 3px 0 0;
     font-style: italic;
   }
+  .hourly-temp { color: #FF8C00; font-weight: 600; }
+  .temp-graph-line { stroke: #FF8C00; stroke-width: 2; fill: none; }
+  .temp-graph-area { fill: rgba(255, 140, 0, 0.15); }
+  .temp-graph-label { fill: #FF8C00; font-size: 10px; }
+  .graph-type-indicator {
+    font-size: 10px;
+    color: var(--secondary-text-color);
+    text-align: center;
+    padding: 2px 0 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
 `;
 
 function ordinal(n) {
@@ -150,6 +164,11 @@ function escapeHtml(str) {
 // mm/time label rows beneath it) - shared by the renderer and the initial
 // scroll-centering math so they never drift out of sync with each other.
 const GRAPH_COL_WIDTH = 44;
+
+// Colours for the temperature graph — distinct from the rain graph's teal palette
+// so the two views are immediately distinguishable at a glance.
+const TEMP_COLOR = '#FF8C00';  // Dark orange for temperature line
+const TEMP_COLOR_FILL = 'rgba(255, 140, 0, 0.15)';  // Orange fill
 
 // Hourly forecast entries use labels like '6am' / '2pm' / '12am' - convert to
 // a 0-23 hour number so we can locate "now" (or a given hour) as a column index.
@@ -267,10 +286,11 @@ class Dash4WeatherCard extends HTMLElement {
     this._alertIndex = 0;
     this._expandedDay = null;
     this._expandTimer = null;
-    // View mode ('graph'|'raw') for whichever day is currently expanded - only
-    // one day is ever expanded at a time, so a single field is sufficient.
-    // Always reset to 'graph' on every collapsed->expanded transition.
-    this._viewMode = 'graph';
+    // View mode ('temp_graph'|'rain_graph'|'raw') for whichever day is
+    // currently expanded - only one day is ever expanded at a time, so a
+    // single field is sufficient. Always reset to 'temp_graph' on every
+    // collapsed->expanded transition (overridden by _getInitialViewMode).
+    this._viewMode = 'temp_graph';
     // Single/double-tap disambiguation timer for taps on the graph itself.
     this._graphTapTimer = null;
     // Whether the initial scroll-to-center-on-now has already been applied
@@ -315,6 +335,7 @@ class Dash4WeatherCard extends HTMLElement {
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
   // cyclable). Same pattern used by mushroom.js for its own variable-height cards.
+
   getGridOptions() {
     return { columns: 12 };
   }
@@ -346,7 +367,7 @@ class Dash4WeatherCard extends HTMLElement {
     // otherwise a later reconnect would redraw an open panel that can never
     // time out on its own (connectedCallback doesn't restart the timer).
     this._expandedDay = null;
-    this._viewMode = 'graph';
+    this._viewMode = 'temp_graph';
     this._centeringDone = false;
   }
 
@@ -415,13 +436,17 @@ class Dash4WeatherCard extends HTMLElement {
     const d = a.box3_display || {};
     const uvExtreme = d.cls === 'uv' && uvIndex >= 11;
 
+    // Capture raining state for the initial view mode decision when a row
+    // is expanded (temperature graph by default, rain graph when raining).
+    this._isRaining = !!a.is_raining;
+
     let box3Classes = 'box box3 tappable';
     if (d.cls) box3Classes += ' ' + d.cls;
     if (uvExtreme) box3Classes += ' uv-extreme';
     if (d.compact) box3Classes += ' compact';
     if ((parseInt(a.extreme_count, 10) || 0) >= 2) box3Classes += ' multi-extreme';
 
-    const box1Class = 'box' + (a.box1_border && a.box1_border !== 'neutral' ? ' ' + a.box1_border : '');
+    const box1Class = 'box box1 tappable' + (a.box1_border && a.box1_border !== 'neutral' ? ' ' + a.box1_border : '');
 
     const forecastRows = a.forecast_rows || [];
     const hourlyToday = a.hourly_rain_today || [];
@@ -442,13 +467,22 @@ class Dash4WeatherCard extends HTMLElement {
       </tr>`;
       if (!isExpanded) return mainRow;
       const hourlyData = hourlyDataFor(dayKey);
-      const viewMode = this._viewMode || 'graph';
-      const content = viewMode === 'raw'
-        ? this._renderRawGrid(hourlyData)
-        : this._renderHourlyGraph(dayKey, hourlyData);
+      const viewMode = this._viewMode || 'temp_graph';
+      let content;
+      if (viewMode === 'raw') {
+        content = this._renderRawGrid(hourlyData);
+      } else if (viewMode === 'temp_graph') {
+        content = this._renderTempGraph(dayKey, hourlyData);
+      } else {
+        content = this._renderHourlyGraph(dayKey, hourlyData);
+      }
+      const graphLabel = viewMode === 'temp_graph' ? 'Temperature' : (viewMode === 'rain_graph' ? 'Rain Probability' : '');
       const detailRow = `
       <tr class="hourly-detail-row">
-        <td colspan="5">${content}</td>
+        <td colspan="5">
+          ${graphLabel ? `<div class="graph-type-indicator">${graphLabel}</div>` : ''}
+          ${content}
+        </td>
       </tr>`;
       return mainRow + detailRow;
     }).join('');
@@ -476,14 +510,14 @@ class Dash4WeatherCard extends HTMLElement {
           <span class="tsep">&middot;</span>
           <span class="time"></span>
         </div>
-        <div class="title-divider"><span class="dot"></span><span class="rule"></span><span class="dot"></span></div>
+        <div class="title-divider"><span class="rule"></span></div>
 
         <div class="box-row">
           <div class="${box1Class}">
             <div class="label">Temp</div>
             <div class="value">${escapeHtml(a.box1_temp)}</div>
           </div>
-          <div class="box">
+          <div class="box box2 tappable">
             <div class="label">Humidity</div>
             <div class="value">${escapeHtml(a.box2_humidity)}</div>
           </div>
@@ -520,13 +554,22 @@ class Dash4WeatherCard extends HTMLElement {
     const box3El = this.shadowRoot.querySelector('.box3');
     if (box3El) box3El.addEventListener('click', () => this._handleBox3Click());
 
+    const cardState = this._hass.states[this._entityId];
+    const tempEntityId = cardState?.attributes?.temp_entity_id;
+    const box1El = this.shadowRoot.querySelector('.box1');
+    if (box1El && tempEntityId) box1El.addEventListener('click', () => this._openMoreInfo(tempEntityId));
+
+    const humidityEntityId = cardState?.attributes?.humidity_entity_id;
+    const box2El = this.shadowRoot.querySelector('.box2');
+    if (box2El && humidityEntityId) box2El.addEventListener('click', () => this._openMoreInfo(humidityEntityId));
+
     this.shadowRoot.querySelectorAll('.tappable-row').forEach(el => {
       el.addEventListener('click', () => this._handleForecastRowClick(el.dataset.dayKey));
     });
 
     if (this._expandedDay) {
-      const viewMode = this._viewMode || 'graph';
-      if (viewMode === 'graph') {
+      const viewMode = this._viewMode || 'temp_graph';
+      if (viewMode === 'temp_graph' || viewMode === 'rain_graph') {
         const scrollEl = this.shadowRoot.querySelector('.hourly-graph-scroll');
         if (scrollEl) {
           attachTapSwipeGuard(scrollEl, (e) => {
@@ -583,6 +626,7 @@ class Dash4WeatherCard extends HTMLElement {
     const cells = hourlyData.map(h => `
             <div class="hourly-cell">
               <div class="hourly-time">${escapeHtml(h.time)}</div>
+              <div class="hourly-temp">${escapeHtml(h.temp != null ? h.temp + '°' : '--')}</div>
               <div class="hourly-prob">${escapeHtml(h.prob)}%</div>
               <div class="hourly-mm">≤${escapeHtml(h.mm)}mm</div>
             </div>`).join('');
@@ -693,6 +737,104 @@ class Dash4WeatherCard extends HTMLElement {
       ${moreDataNote}`;
   }
 
+  // Scrollable SVG line/area chart of temperature across the day, auto-scaled
+  // to the day's min/max with ±2 °C padding. Orange palette to distinguish
+  // from the teal rain graph. Same structural pattern as _renderHourlyGraph.
+  _renderTempGraph(dayKey, hourlyData) {
+    const colWidth = GRAPH_COL_WIDTH;
+    const chartHeight = 54;
+    const padTop = 4;
+    const padBottom = 4;
+    const usable = chartHeight - padTop - padBottom;
+    const width = Math.max(hourlyData.length * colWidth, colWidth);
+
+    // Extract temperatures and calculate min/max for Y-axis scaling
+    const validTemps = hourlyData.map(h => parseFloat(h.temp)).filter(t => !isNaN(t));
+    const minTemp = validTemps.length ? Math.min(...validTemps) : 0;
+    const maxTemp = validTemps.length ? Math.max(...validTemps) : 20;
+    const tempMin = minTemp - 2;  // Add 2°C padding below
+    const tempMax = maxTemp + 2;  // Add 2°C padding above
+    const range = tempMax - tempMin || 1;  // Avoid division by zero
+
+    const points = hourlyData.map((h, i) => {
+      const x = i * colWidth + colWidth / 2;
+      const temp = parseFloat(h.temp);
+      if (isNaN(temp)) return { x, y: null, temp: null };
+      const y = padTop + usable * (1 - (temp - tempMin) / range);
+      return { x, y, temp };
+    });
+
+    // Build SVG path using Catmull-Rom for smooth curves
+    const validPoints = points.filter(p => p.y !== null);
+    const curveSegs = validPoints.length > 1 ? catmullRomSegments(validPoints) : [];
+
+    // Left edge extension (if first valid point is not at baseline)
+    const extendLeft = validPoints.length > 0 && validPoints[0].temp > tempMin;
+    const topSegs = [];
+    if (extendLeft) {
+      topSegs.push(`M0,${validPoints[0].y.toFixed(1)}`);
+      topSegs.push(`L${validPoints[0].x.toFixed(1)},${validPoints[0].y.toFixed(1)}`);
+      topSegs.push(...curveSegs.slice(1));
+    } else {
+      topSegs.push(...curveSegs);
+    }
+
+    // Right edge: taper to baseline if last valid point is not at baseline
+    const extendRight = validPoints.length > 0 && validPoints[validPoints.length - 1].temp > tempMin;
+    const baselineY = chartHeight - padBottom;
+    if (extendRight) {
+      const lastPt = validPoints[validPoints.length - 1];
+      const cp1x = lastPt.x + (width - lastPt.x) * 0.5;
+      const cp2x = lastPt.x + (width - lastPt.x) * 0.85;
+      topSegs.push(`C${cp1x.toFixed(1)},${lastPt.y.toFixed(1)} ${cp2x.toFixed(1)},${baselineY.toFixed(1)} ${width.toFixed(1)},${baselineY.toFixed(1)}`);
+    }
+
+    const areaStartX = extendLeft ? 0 : (validPoints.length ? validPoints[0].x : 0);
+    const areaEndX = extendRight ? width : (validPoints.length ? validPoints[validPoints.length - 1].x : 0);
+
+    const linePath = topSegs.join(' ');
+    const areaPath = topSegs.length
+      ? `M${areaStartX.toFixed(1)},${chartHeight} ` +
+        topSegs.join(' ').replace(/^M/, 'L') +
+        ` L${areaEndX.toFixed(1)},${chartHeight} Z`
+      : '';
+
+    const dots = points
+      .filter(p => p.y !== null)
+      .map(p => `<circle class="temp-graph-dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2" fill="${TEMP_COLOR}"></circle>`)
+      .join('');
+
+    // Temperature labels above each point
+    const tempLabels = points
+      .filter(p => p.y !== null && p.temp !== null)
+      .map(p => `
+      <text class="temp-graph-label" x="${p.x.toFixed(1)}" y="${(p.y - 6).toFixed(1)}" text-anchor="middle" fill="${TEMP_COLOR}">${p.temp.toFixed(0)}°</text>
+    `).join('');
+
+    // Hour labels at bottom
+    const timeCols = hourlyData.map(h => `
+      <div class="hourly-graph-col" style="width:${colWidth}px;"><div class="hourly-time">${escapeHtml(h.time)}</div></div>`).join('');
+
+    // More data note (same as rain graph)
+    const moreDataNote = (dayKey === 'today' && extendRight)
+      ? `<div class="hourly-graph-more-note">See Tmow for further data</div>`
+      : '';
+
+    return `
+      <div class="hourly-graph-scroll" data-day-key="${dayKey}">
+        <div class="hourly-graph-content" style="width:${width}px;">
+          <svg class="hourly-graph-svg" width="${width}" height="${chartHeight}" viewBox="0 0 ${width} ${chartHeight}" preserveAspectRatio="none">
+            <path class="temp-graph-area" d="${areaPath}" fill="${TEMP_COLOR_FILL}"></path>
+            <path class="temp-graph-line" d="${linePath}" stroke="${TEMP_COLOR}" stroke-width="2" fill="none"></path>
+            ${tempLabels}
+            ${dots}
+          </svg>
+          <div class="hourly-graph-row">${timeCols}</div>
+        </div>
+      </div>
+      ${moreDataNote}`;
+  }
+
   _handleBox3Click() {
     if (this._clickTimer !== null) {
       // second click within the window - reset to auto instead of cycling
@@ -705,6 +847,21 @@ class Dash4WeatherCard extends HTMLElement {
         this._hass.callService('script', 'dash4_box3_tap');
       }, 260);
     }
+  }
+
+  // Opens HA's native more-info dialog (built-in history graph included) for
+  // the given entity — same convention used by energy-flow-card.js.
+  _openMoreInfo(entityId) {
+    const event = new CustomEvent('hass-more-info', {
+      bubbles: true, composed: true, detail: { entityId },
+    });
+    this.dispatchEvent(event);
+  }
+
+  // Returns the appropriate initial view mode for a newly expanded day:
+  // rain graph when it's currently raining, temperature graph otherwise.
+  _getInitialViewMode(isRaining) {
+    return isRaining ? 'rain_graph' : 'temp_graph';
   }
 
   // Tapping the row header while its own panel is already expanded mirrors
@@ -730,7 +887,7 @@ class Dash4WeatherCard extends HTMLElement {
       this._graphTapTimer = null;
     }
     this._expandedDay = dayKey;
-    this._viewMode = 'graph';
+    this._viewMode = this._getInitialViewMode(this._isRaining);
     this._centeringDone = false;
     this._startExpandTimer();
     this._render();
@@ -778,13 +935,19 @@ class Dash4WeatherCard extends HTMLElement {
     if (this._graphTapTimer !== null) {
       clearTimeout(this._graphTapTimer);
       this._graphTapTimer = null;
-      // double tap -> collapse directly, skipping raw view
+      // double tap -> collapse directly
       this._collapseExpanded();
     } else {
       this._graphTapTimer = setTimeout(() => {
         this._graphTapTimer = null;
-        // single tap -> switch to raw view (does not collapse, timer keeps running)
-        this._viewMode = 'raw';
+        // single tap -> cycle through views: temp_graph -> rain_graph -> raw
+        if (this._viewMode === 'temp_graph') {
+          this._viewMode = 'rain_graph';
+        } else if (this._viewMode === 'rain_graph') {
+          this._viewMode = 'raw';
+        } else {
+          this._viewMode = 'temp_graph';
+        }
         this._render();
       }, 260);
     }
