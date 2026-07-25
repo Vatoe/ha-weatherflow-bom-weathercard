@@ -308,7 +308,7 @@ template:
                 {% endif %}
               {% endfor %}
               {% set icon = ns.matched_icon if ns.matched_icon is not none else condition_icon %}
-              {% set tappable = (label == 'Today' and rain_chance_num > 0 and hourly_today | length > 0) or (label == 'Tmow' and rain_chance_num > 0 and hourly_tomorrow | length > 0) %}
+              {% set tappable = (label == 'Today' and hourly_today | length > 0) or (label == 'Tmow' and hourly_tomorrow | length > 0) %}
               {% set ns.rows = ns.rows + [{'day': label, 'icon': icon, 'temp_max': tmax, 'temp_min': tmin, 'rain_chance': rain_chance, 'outlook': outlook, 'tappable': tappable}] %}
             {% endfor %}
             {{ ns.rows }}
