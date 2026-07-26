@@ -79,7 +79,8 @@ const STYLE = `
   table.forecast td.temp { width: 20%; color: var(--secondary-text-color); white-space: nowrap; }
   table.forecast td.temp b { color: var(--primary-text-color); font-weight: 600; }
   table.forecast td.rain { width: 14%; color: #66D4CF; }
-  table.forecast td.desc { color: var(--secondary-text-color); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  table.forecast td.desc { color: var(--secondary-text-color); }
+  table.forecast td.desc .desc-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
   .alert-lines { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 5px 12px; border-left: 3px solid #66D4CF; }
   .alert-lines.warning { border-left-color: #FF453A; }
@@ -463,7 +464,7 @@ class Dash4WeatherCard extends HTMLElement {
         <td class="icon">${ICON_MAP[(row.icon || '').replace('mdi:weather-', '')] || ''}</td>
         <td class="temp"><b>${escapeHtml(row.temp_max)}</b>&deg; / ${escapeHtml(row.temp_min)}&deg;</td>
         <td class="rain">${escapeHtml(row.rain_chance)}</td>
-        <td class="desc">${escapeHtml(row.outlook)}</td>
+        <td class="desc"><span class="desc-text">${escapeHtml(row.outlook)}</span></td>
       </tr>`;
       if (!isExpanded) return mainRow;
       const hourlyData = hourlyDataFor(dayKey);
