@@ -336,7 +336,6 @@ class Dash4WeatherCard extends HTMLElement {
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
   // cyclable). Same pattern used by mushroom.js for its own variable-height cards.
-
   getGridOptions() {
     return { columns: 12 };
   }
@@ -741,10 +740,12 @@ class Dash4WeatherCard extends HTMLElement {
   // Scrollable SVG line/area chart of temperature across the day, auto-scaled
   // to the day's min/max with ±2 °C padding. Orange palette to distinguish
   // from the teal rain graph. Same structural pattern as _renderHourlyGraph.
+  // Extra top padding (14px vs 4px for rain) ensures the temperature labels
+  // above each data point are never clipped by the SVG viewport.
   _renderTempGraph(dayKey, hourlyData) {
     const colWidth = GRAPH_COL_WIDTH;
-    const chartHeight = 54;
-    const padTop = 4;
+    const chartHeight = 64;
+    const padTop = 14;
     const padBottom = 4;
     const usable = chartHeight - padTop - padBottom;
     const width = Math.max(hourlyData.length * colWidth, colWidth);
