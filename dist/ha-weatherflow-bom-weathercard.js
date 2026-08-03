@@ -353,7 +353,6 @@ class Dash4WeatherCard extends HTMLElement {
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
   // cyclable). Same pattern used by mushroom.js for its own variable-height cards.
-  // See docs/reference/best-practices/lovelace-custom-cards.md.
   getGridOptions() {
     return { columns: 12 };
   }
