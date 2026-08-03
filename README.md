@@ -26,7 +26,7 @@ Box 3 automatically shows whichever condition is most relevant right now, in pri
 
 A 5-day forecast table sourced from BOM, with day labels derived from each forecast entity's own date (not sensitive to BOM's forecast-reissue timing). The 5-day rows' own refresh cadence follows your BOM integration's own polling settings — this card doesn't control that. The card's own hourly-rain re-fetch (`weather.get_forecasts`, used for the tappable graph below) runs on a fixed 5-minute schedule plus once at Home Assistant startup, independent of your BOM integration's general polling.
 
-Tap on Today or Tomorrow (when rain is forecast) to expand an inline, horizontally-scrollable hourly rain graph — smoothed curve, probability/mm/time labels.
+Tap on Today or Tomorrow (when rain is forecast) to expand an inline, horizontally-scrollable hourly rain graph — smoothed curve, probability/mm/time labels. The graph line draws itself on from left to right the first time you expand a day, with the area fill and per-hour labels fading in staggered behind it — a one-shot reveal, not a replay on every re-render.
 
 **Today and Tomorrow's rain % is the max of that day's hourly chances, not BOM's whole-day figure.** BOM's daily probability represents "chance of any rain during the day," which is a different (and usually higher) statistic than any single hour's chance — showing it as the row's headline number could disagree with the peak you'd see after tapping to expand the graph, which reads as contradictory at a glance. Tuesday/Wednesday/Thursday still show BOM's daily figure directly, since BOM's hourly data only covers the next ~48 hours and there's no expanded graph for those rows to be inconsistent with.
 

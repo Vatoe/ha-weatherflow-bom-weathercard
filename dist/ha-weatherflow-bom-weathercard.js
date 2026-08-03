@@ -15,11 +15,15 @@ const STYLE = `
   :host { display: block; }
   * { box-sizing: border-box; }
   .card {
-    background: var(--ha-card-background, rgba(0,0,0,0.3));
+    background: var(--ha-card-background, var(--card-background-color, rgba(0,0,0,0.3)));
     backdrop-filter: var(--ha-card-backdrop-filter, blur(20px));
     -webkit-backdrop-filter: var(--ha-card-backdrop-filter, blur(20px));
     border-radius: var(--ha-card-border-radius, 12px);
-    box-shadow: var(--ha-card-box-shadow, none);
+    box-shadow: var(--ha-card-box-shadow,
+      0.5px 0.5px 1px 0px rgba(255, 255, 255, 0.40) inset,
+      -0.5px -0.5px 1px 0px rgba(255, 255, 255, 0.10) inset,
+      0px 1px 2px 0px rgba(0, 0, 0, 0.10)),
+      0 8px 30px rgba(0,0,0,0.35);
     padding: 12px 18px 12px;
     color: var(--primary-text-color);
     font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -31,14 +35,14 @@ const STYLE = `
   }
   .title-line .tsep { font-size: 14px; font-weight: 300; color: var(--secondary-text-color); }
   .title-divider { display: flex; align-items: center; margin-bottom: 18px; }
-  .title-divider .rule { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.16) 16%, rgba(255,255,255,0.16) 84%, rgba(255,255,255,0) 100%); }
+  .title-divider .rule { flex: 1; height: 1px; background: linear-gradient(90deg, transparent 0%, var(--divider-color, rgba(255,255,255,0.16)) 16%, var(--divider-color, rgba(255,255,255,0.16)) 84%, transparent 100%); }
   .title-line .place { font-size: 15px; font-weight: 300; letter-spacing: 1.6px; text-transform: uppercase; color: var(--primary-text-color); white-space: nowrap; }
   .title-line .date, .title-line .time { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
   .title-line .date { font-weight: 300; color: var(--primary-text-color); }
   .title-line .time { font-weight: 900; color: var(--primary-text-color); }
 
   .box-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px; }
-  .box { background: rgba(255,255,255,0.07); border-radius: 12px; padding: 8px 10px; text-align: center; border: 1px solid rgba(255,255,255,0.10); overflow: hidden; }
+  .box { background: var(--secondary-background-color, rgba(255,255,255,0.07)); border-radius: 12px; padding: 8px 10px; text-align: center; border: 1px solid var(--divider-color, rgba(255,255,255,0.10)); overflow: hidden; }
   .box .label { font-size: 11.5px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
   .box .value { font-size: 26px; font-weight: 700; line-height: 1.05; color: var(--primary-text-color); }
   .box .sub { font-size: 12.5px; color: var(--secondary-text-color); margin-top: 2px; font-weight: 500; }
@@ -82,7 +86,7 @@ const STYLE = `
   table.forecast td.desc { color: var(--secondary-text-color); }
   table.forecast td.desc .desc-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-  .alert-lines { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 5px 12px; border-left: 3px solid #66D4CF; }
+  .alert-lines { background: var(--secondary-background-color, rgba(255,255,255,0.07)); border: 1px solid var(--divider-color, rgba(255,255,255,0.10)); border-radius: 10px; padding: 5px 12px; border-left: 3px solid #66D4CF; }
   .alert-lines.warning { border-left-color: #FF453A; }
   .alert-lines .l1 { font-size: 13.5px; font-weight: 400; color: var(--primary-text-color); }
   .alert-lines.warning .l1 { font-weight: 500; }
@@ -98,7 +102,7 @@ const STYLE = `
     grid-template-columns: repeat(5, 1fr);
     gap: 6px 4px;
     padding: 6px 4px;
-    background: rgba(255,255,255,0.04);
+    background: var(--secondary-background-color, rgba(255,255,255,0.04));
     border-radius: 8px;
   }
   .hourly-cell { text-align: center; font-size: 11px; line-height: 1.4; }
@@ -114,7 +118,7 @@ const STYLE = `
     cursor: pointer;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
-    background: rgba(255,255,255,0.04);
+    background: var(--secondary-background-color, rgba(255,255,255,0.04));
     border-radius: 8px;
     padding: 6px 4px;
     width: 100%;
@@ -287,6 +291,10 @@ class Dash4WeatherCard extends HTMLElement {
     this._alertIndex = 0;
     this._expandedDay = null;
     this._expandTimer = null;
+    // Day key that was expanded on the previous render - drives the "row just
+    // opened" flag so the draw-on animation plays only on the render where a
+    // row first expands (mirrors weather-station-card's _prevExpandedIdx).
+    this._prevExpandedDay = null;
     // View mode ('temp_graph'|'rain_graph'|'raw') for whichever day is
     // currently expanded - only one day is ever expanded at a time, so a
     // single field is sufficient. Always reset to 'temp_graph' on every
@@ -307,6 +315,11 @@ class Dash4WeatherCard extends HTMLElement {
     // already been applied once, so a periodic data refresh (~5 min) doesn't
     // silently snap an open panel back to the start of the day.
     this._savedScrollLeft = 0;
+    // Timestamp until which periodic re-renders are suppressed after a row
+    // expands, so a live entity tick can't rebuild the DOM mid-draw and kill
+    // the running animation. _lastKey is left untouched while suppressed, so
+    // the tick after the window re-renders normally.
+    this._animUntil = 0;
   }
 
   setConfig(config) {
@@ -318,6 +331,10 @@ class Dash4WeatherCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    // Suppress re-renders while the expand draw animation is playing (~2.8s
+    // after a row opens) — an innerHTML swap mid-draw kills the running
+    // animation. _lastKey is left untouched, so the next tick re-renders.
+    if (this._expandedDay != null && this._animUntil && Date.now() < this._animUntil) return;
     // set hass() fires on every state change house-wide, not just this card's own
     // entity - only re-render when something we actually display has changed.
     const entity = hass.states[this._entityId];
@@ -336,6 +353,7 @@ class Dash4WeatherCard extends HTMLElement {
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
   // cyclable). Same pattern used by mushroom.js for its own variable-height cards.
+  // See docs/reference/best-practices/lovelace-custom-cards.md.
   getGridOptions() {
     return { columns: 12 };
   }
@@ -453,6 +471,11 @@ class Dash4WeatherCard extends HTMLElement {
     const hourlyTomorrow = a.hourly_rain_tomorrow || [];
     const dayKeyFor = (day) => day === 'Today' ? 'today' : day === 'Tmow' ? 'tomorrow' : null;
     const hourlyDataFor = (key) => key === 'today' ? hourlyToday : key === 'tomorrow' ? hourlyTomorrow : [];
+    // True only on the render where a row JUST expanded — the draw animation
+    // must play on the first graph displayed (which respects the rain-aware
+    // initial-view priority via _getInitialViewMode), never on subsequent
+    // view cycles or periodic rebuilds.
+    const justOpened = this._expandedDay !== null && this._prevExpandedDay !== this._expandedDay;
     const rows = forecastRows.map(row => {
       const dayKey = dayKeyFor(row.day);
       const isTappable = !!row.tappable && dayKey !== null;
@@ -472,9 +495,9 @@ class Dash4WeatherCard extends HTMLElement {
       if (viewMode === 'raw') {
         content = this._renderRawGrid(hourlyData);
       } else if (viewMode === 'temp_graph') {
-        content = this._renderTempGraph(dayKey, hourlyData);
+        content = this._renderTempGraph(dayKey, hourlyData, justOpened);
       } else {
-        content = this._renderHourlyGraph(dayKey, hourlyData);
+        content = this._renderHourlyGraph(dayKey, hourlyData, justOpened);
       }
       const graphLabel = viewMode === 'temp_graph' ? 'Temperature' : (viewMode === 'rain_graph' ? 'Rain Probability' : '');
       const detailRow = `
@@ -486,6 +509,7 @@ class Dash4WeatherCard extends HTMLElement {
       </tr>`;
       return mainRow + detailRow;
     }).join('');
+    this._prevExpandedDay = this._expandedDay;
 
     const alert = a.alert_lines || {};
     const alertTitles = alert.titles || (alert.line1 ? [alert.line1] : []);
@@ -591,7 +615,14 @@ class Dash4WeatherCard extends HTMLElement {
             const nowHour = new Date().getHours();
             const idx = findHourColumnIndex(hourlyData, nowHour);
             let initialScrollLeft = 0;
-            if (idx >= 0) {
+            // Only Today centers on the current hour (which lands at its own
+            // left edge anyway). Tomorrow always opens at the graph's left
+            // edge (scrollLeft 0) exactly like Today, so the expand line draw
+            // starts on-screen from its first frame in both rows and they
+            // animate identically - centering Tomorrow on the current hour
+            // put the draw's starting point off-screen, delaying the visible
+            // start and making the two rows feel different.
+            if (idx >= 0 && this._expandedDay === 'today') {
               const colCenterX = idx * GRAPH_COL_WIDTH + GRAPH_COL_WIDTH / 2;
               const target = colCenterX - scrollEl.clientWidth / 2;
               const maxScroll = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth);
@@ -616,6 +647,8 @@ class Dash4WeatherCard extends HTMLElement {
         }
       }
     }
+
+    this._runExpandAnimation();
   }
 
   // Existing time/prob%/mm grid (unchanged appearance from the prior spec) -
@@ -635,7 +668,7 @@ class Dash4WeatherCard extends HTMLElement {
 
   // Scrollable SVG line/area chart of rain probability across the day, with
   // mm labels and hour labels beneath.
-  _renderHourlyGraph(dayKey, hourlyData) {
+  _renderHourlyGraph(dayKey, hourlyData, draw) {
     const colWidth = GRAPH_COL_WIDTH;
     const chartHeight = 54;
     const padTop = 4;
@@ -702,7 +735,7 @@ class Dash4WeatherCard extends HTMLElement {
       : '';
 
     const dots = points
-      .map(p => `<circle class="hourly-graph-dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2"></circle>`)
+      .map(p => `<circle class="hourly-graph-dot${draw ? ' draw' : ''}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2"></circle>`)
       .join('');
 
     const probCols = hourlyData.map(h => `
@@ -725,13 +758,13 @@ class Dash4WeatherCard extends HTMLElement {
       <div class="hourly-graph-scroll" data-day-key="${dayKey}">
         <div class="hourly-graph-content" style="width:${width}px;">
           <svg class="hourly-graph-svg" width="${width}" height="${chartHeight}" viewBox="0 0 ${width} ${chartHeight}" preserveAspectRatio="none">
-            <path class="hourly-graph-area" d="${areaPath}"></path>
-            <path class="hourly-graph-line" d="${linePath}"></path>
+            <path class="hourly-graph-area${draw ? ' draw' : ''}" d="${areaPath}"></path>
+            <path class="hourly-graph-line${draw ? ' draw' : ''}" d="${linePath}"></path>
             ${dots}
           </svg>
-          <div class="hourly-graph-row">${probCols}</div>
-          <div class="hourly-graph-row">${mmCols}</div>
-          <div class="hourly-graph-row">${timeCols}</div>
+          <div class="hourly-graph-row${draw ? ' draw' : ''}">${probCols}</div>
+          <div class="hourly-graph-row${draw ? ' draw' : ''}">${mmCols}</div>
+          <div class="hourly-graph-row${draw ? ' draw' : ''}">${timeCols}</div>
         </div>
       </div>
       ${moreDataNote}`;
@@ -742,7 +775,7 @@ class Dash4WeatherCard extends HTMLElement {
   // from the teal rain graph. Same structural pattern as _renderHourlyGraph.
   // Extra top padding (14px vs 4px for rain) ensures the temperature labels
   // above each data point are never clipped by the SVG viewport.
-  _renderTempGraph(dayKey, hourlyData) {
+  _renderTempGraph(dayKey, hourlyData, draw) {
     const colWidth = GRAPH_COL_WIDTH;
     const chartHeight = 64;
     const padTop = 14;
@@ -803,14 +836,14 @@ class Dash4WeatherCard extends HTMLElement {
 
     const dots = points
       .filter(p => p.y !== null)
-      .map(p => `<circle class="temp-graph-dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2" fill="${TEMP_COLOR}"></circle>`)
+      .map(p => `<circle class="temp-graph-dot${draw ? ' draw' : ''}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2" fill="${TEMP_COLOR}"></circle>`)
       .join('');
 
     // Temperature labels above each point
     const tempLabels = points
       .filter(p => p.y !== null && p.temp !== null)
       .map(p => `
-      <text class="temp-graph-label" x="${p.x.toFixed(1)}" y="${(p.y - 6).toFixed(1)}" text-anchor="middle" fill="${TEMP_COLOR}">${p.temp.toFixed(0)}°</text>
+      <text class="temp-graph-label${draw ? ' draw' : ''}" x="${p.x.toFixed(1)}" y="${(p.y - 6).toFixed(1)}" text-anchor="middle" fill="${TEMP_COLOR}">${p.temp.toFixed(0)}°</text>
     `).join('');
 
     // Hour labels at bottom
@@ -826,15 +859,76 @@ class Dash4WeatherCard extends HTMLElement {
       <div class="hourly-graph-scroll" data-day-key="${dayKey}">
         <div class="hourly-graph-content" style="width:${width}px;">
           <svg class="hourly-graph-svg" width="${width}" height="${chartHeight}" viewBox="0 0 ${width} ${chartHeight}" preserveAspectRatio="none">
-            <path class="temp-graph-area" d="${areaPath}" fill="${TEMP_COLOR_FILL}"></path>
-            <path class="temp-graph-line" d="${linePath}" stroke="${TEMP_COLOR}" stroke-width="2" fill="none"></path>
+            <path class="temp-graph-area${draw ? ' draw' : ''}" d="${areaPath}" fill="${TEMP_COLOR_FILL}"></path>
+            <path class="temp-graph-line${draw ? ' draw' : ''}" d="${linePath}" stroke="${TEMP_COLOR}" stroke-width="2" fill="none"></path>
             ${tempLabels}
             ${dots}
           </svg>
-          <div class="hourly-graph-row">${timeCols}</div>
+          <div class="hourly-graph-row${draw ? ' draw' : ''}">${timeCols}</div>
         </div>
       </div>
       ${moreDataNote}`;
+  }
+
+  // Drives the expand draw-on animation imperatively via the Web Animations
+  // API — ported from weather-station-card v8. The line draws left-to-right,
+  // the area fades in behind it once the line finishes, and the detail
+  // elements (dots + temp labels + per-hour prob/mm/time columns) fade in as
+  // the line passes their position. Plays only on the render where a row JUST
+  // expanded — the .draw markers are present only on that render's graph,
+  // which is always the priority one (rain when raining, temp otherwise, per
+  // _getInitialViewMode). The re-render guard in set hass stops a live entity
+  // tick from wiping it mid-draw. Deliberately not gated on
+  // prefers-reduced-motion — matches weather-station-card, owner asked for it.
+  _runExpandAnimation() {
+    const line = this.shadowRoot.querySelector('path.temp-graph-line.draw, path.hourly-graph-line.draw');
+    if (!line) return;
+    try {
+      const len = line.getTotalLength();
+      if (!len) return;
+      // Draw pace is proportional to the graph's column count so both rows
+      // move at the same pen speed: Today (13 cols right now) keeps its
+      // original ~1600ms feel, Tomorrow (always 24 cols) draws slower to
+      // match. Floor keeps a short evening graph from strobing.
+      const nCols = Math.max(0, this.shadowRoot.querySelectorAll('circle.draw').length);
+      const duration = Math.max(600, Math.round(1600 * Math.max(1, nCols - 1) / 12));
+      line.style.strokeDasharray = len;
+      line.style.strokeDashoffset = len;
+      line.getBoundingClientRect();
+      line.animate(
+        [{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
+        { duration, delay: 200, easing: 'ease-out', fill: 'forwards' }
+      );
+      const area = this.shadowRoot.querySelector('path.temp-graph-area.draw, path.hourly-graph-area.draw');
+      if (area) {
+        area.style.opacity = 0;
+        area.getBoundingClientRect();
+        area.animate(
+          [{ opacity: 0 }, { opacity: 1 }],
+          { duration: 800, delay: duration + 300, easing: 'ease-out', fill: 'forwards' }
+        );
+      }
+      const els = this.shadowRoot.querySelectorAll('circle.draw, text.temp-graph-label.draw, .hourly-graph-row.draw');
+      const stepCount = Math.max(1, els.length - 1);
+      els.forEach((el, i) => {
+        const delayMs = 200 + Math.round(duration * (i / stepCount));
+        el.style.opacity = 0;
+        el.getBoundingClientRect();
+        el.animate(
+          [{ opacity: 0 }, { opacity: 1 }],
+          { duration: 400, delay: delayMs, easing: 'ease-out', fill: 'forwards' }
+        );
+      });
+      // Suppress live-update re-renders until the last animation (area fade,
+      // ends at duration+300+800) has finished, with a little margin. Armed
+      // only after a successful setup, so a geometry failure can't block live
+      // re-renders needlessly.
+      this._animUntil = Date.now() + duration + 1200;
+    } catch (err) {
+      // Animation is best-effort decoration — never let a geometry/animation
+      // failure take down the whole _render().
+      console.error('dash4-weather-card expand animation failed', err);
+    }
   }
 
   _handleBox3Click() {
@@ -942,13 +1036,14 @@ class Dash4WeatherCard extends HTMLElement {
     } else {
       this._graphTapTimer = setTimeout(() => {
         this._graphTapTimer = null;
-        // single tap -> cycle through views: temp_graph -> rain_graph -> raw
-        if (this._viewMode === 'temp_graph') {
-          this._viewMode = 'rain_graph';
-        } else if (this._viewMode === 'rain_graph') {
-          this._viewMode = 'raw';
+        // single tap -> cycle through views, ordered by the current default:
+        // not raining: temp_graph -> rain_graph -> raw
+        // raining:     rain_graph -> temp_graph -> raw (raw's own tap collapses)
+        const initial = this._getInitialViewMode(this._isRaining);
+        if (this._viewMode === initial) {
+          this._viewMode = initial === 'temp_graph' ? 'rain_graph' : 'temp_graph';
         } else {
-          this._viewMode = 'temp_graph';
+          this._viewMode = 'raw';
         }
         this._render();
       }, 260);
