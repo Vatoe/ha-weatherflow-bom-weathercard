@@ -71,15 +71,14 @@ is, the smaller an extra gap counts as "notable" (a 1° chill matters more at
 
 | Actual temp | Feels-colder trigger | | Actual temp | Feels-hotter trigger |
 |---|---|---|---|---|
-| ≤ 10°C | feels ≥1° colder | | > 35°C | feels ≥1° hotter |
-| 10–15°C | feels ≥2° colder | | 30–35°C | feels ≥2° hotter |
-| 15–19°C | feels ≥3° colder | | 25–30°C | feels ≥3° hotter |
-| 19–23°C | feels >4° colder | | | |
+| ≤ 15°C | feels ≥1° colder | | > 35°C | feels ≥1° hotter |
+| 15–19°C | feels ≥3° colder | | 30–35°C | feels ≥2° hotter |
+| 19–23°C | feels >4° colder | | 25–30°C | feels ≥3° hotter |
+| 23–25°C | feels ≥4° colder | | 23–25°C | feels ≥4° hotter |
 
-There's a **dead zone between 23°C and 25°C** where neither can ever trigger,
-regardless of the gap — an intentional side effect of the two scales not
-quite meeting in the middle, left as-is since that band rarely produces a
-meaningfully "notable" feels-like gap either direction anyway.
+The two scales now meet at the 23–25°C band (both sides require a ≥4° gap
+there) — an earlier version of this table had a dead zone in that band where
+neither could trigger; that's been closed.
 
 **Feels Colder/Hotter only has one threshold, not two** — unlike Rain and
 Lightning, there's no separate "mildly colder than usual" tier below the

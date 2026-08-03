@@ -88,12 +88,21 @@ const STYLE = `
 
   .alert-lines { background: var(--secondary-background-color, rgba(255,255,255,0.07)); border: 1px solid var(--divider-color, rgba(255,255,255,0.10)); border-radius: 10px; padding: 5px 12px; border-left: 3px solid #66D4CF; }
   .alert-lines.warning { border-left-color: #FF453A; }
-  .alert-lines .l1 { font-size: 13.5px; font-weight: 400; color: var(--primary-text-color); }
+  .alert-lines .l1-row { display: flex; align-items: center; gap: 6px; }
+  .alert-lines .l1 { font-size: 13.5px; font-weight: 400; color: var(--primary-text-color); flex: 1; min-width: 0; }
+  .alert-lines .l1.expanded { font-size: 15px; }
   .alert-lines.warning .l1 { font-weight: 500; }
+  .alert-lines .alert-chevron {
+    flex-shrink: 0; padding: 0; background: none; border: none; cursor: pointer;
+    color: var(--secondary-text-color); font-size: 10px; line-height: 1;
+    transition: transform 0.25s ease, color 0.3s ease;
+  }
+  .alert-lines .alert-chevron.expanded { transform: rotate(180deg); color: #2dd4bf; }
   .alert-lines .l2 { font-size: 12px; color: var(--secondary-text-color); margin-top: 2px; }
   .alert-lines .count-inline { font-size: 12px; color: var(--secondary-text-color); font-weight: 400; white-space: nowrap; }
   .alert-lines.tappable { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
   .alert-lines.tappable:active { transform: scale(0.98); transition: transform 0.08s; }
+  .alert-lines.fallback-tappable { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
   .forecast tr.tappable-row { cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
   .forecast tr.tappable-row:active { opacity: 0.7; }
   .hourly-detail-row td { padding: 6px 0 8px; max-width: 0; }
@@ -320,6 +329,12 @@ class Dash4WeatherCard extends HTMLElement {
     // the running animation. _lastKey is left untouched while suppressed, so
     // the tick after the window re-renders normally.
     this._animUntil = 0;
+    // Bottom fallback box (no active warning) shows the day's BOM extended
+    // forecast, clamped to 2 lines. _descExpanded toggles full text + typewriter
+    // on tap; _descTimer/_descAnimUntil manage the reveal and its re-render guard.
+    this._descExpanded = false;
+    this._descTimer = null;
+    this._descAnimUntil = 0;
   }
 
   setConfig(config) {
@@ -334,7 +349,9 @@ class Dash4WeatherCard extends HTMLElement {
     // Suppress re-renders while the expand draw animation is playing (~2.8s
     // after a row opens) — an innerHTML swap mid-draw kills the running
     // animation. _lastKey is left untouched, so the next tick re-renders.
-    if (this._expandedDay != null && this._animUntil && Date.now() < this._animUntil) return;
+    // Also suppressed while the fallback box's extended text is typing.
+    if ((this._expandedDay != null && this._animUntil && Date.now() < this._animUntil)
+        || (this._descAnimUntil && Date.now() < this._descAnimUntil)) return;
     // set hass() fires on every state change house-wide, not just this card's own
     // entity - only re-render when something we actually display has changed.
     const entity = hass.states[this._entityId];
@@ -352,7 +369,8 @@ class Dash4WeatherCard extends HTMLElement {
   // Sections-view sizing API - rows intentionally omitted so the grid auto-sizes the
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
-  // cyclable). Same pattern used by mushroom.js for its own variable-height cards.
+  // cyclable, and the fallback forecast text can expand to its full length).
+  // Same pattern used by mushroom.js for its own variable-height cards.
   getGridOptions() {
     return { columns: 12 };
   }
@@ -386,6 +404,11 @@ class Dash4WeatherCard extends HTMLElement {
     this._expandedDay = null;
     this._viewMode = 'temp_graph';
     this._centeringDone = false;
+    if (this._descTimer) {
+      clearInterval(this._descTimer);
+      this._descTimer = null;
+    }
+    this._descAnimUntil = 0;
   }
 
   _renderTitleOnly() {
@@ -409,7 +432,8 @@ class Dash4WeatherCard extends HTMLElement {
   // for the active-warning case (that .l1 has no data-full-text attribute).
   // Runs after every _render() since alert text can change on any hass update.
   _fitFallbackForecastText() {
-    const l1El = this.shadowRoot.querySelector('.alert-lines:not(.warning) .l1');
+    if (this._descExpanded) return;
+    const l1El = this.shadowRoot.querySelector('.alert-lines.fallback-tappable .l1');
     if (!l1El) return;
     const fullText = l1El.dataset.fullText;
     if (!fullText) return;
@@ -435,6 +459,68 @@ class Dash4WeatherCard extends HTMLElement {
       fitted = candidate;
     }
     l1El.textContent = fitted;
+  }
+
+  // Tap on the bottom fallback box (no active warning): toggles the day's
+  // extended forecast between the 2-line clamp and the full text, revealed
+  // word-by-word. Mirrors the BOM forecast card's extended-text interaction —
+  // chevron on the right, font bump 13.5px → 15px, whole text always shown.
+  _toggleFallbackText(e) {
+    e.stopPropagation();
+    if (this._descTimer) { clearInterval(this._descTimer); this._descTimer = null; }
+    const box = this.shadowRoot.querySelector('.alert-lines.fallback-tappable');
+    const l1 = box ? box.querySelector('.l1') : null;
+    const chev = box ? box.querySelector('.alert-chevron') : null;
+    if (!box || !l1 || !chev) return;
+    if (this._descExpanded) {
+      // Collapse: clear the inline clamp, restore the full text, re-clamp.
+      this._descExpanded = false;
+      this._descAnimUntil = 0;
+      l1.classList.remove('expanded');
+      chev.classList.remove('expanded');
+      l1.style.maxHeight = '';
+      l1.style.overflow = '';
+      l1.textContent = l1.dataset.fullText || '';
+      this._fitFallbackForecastText();
+      return;
+    }
+    // Expand: clear the 2-line clamp so the full text can show while typing.
+    this._descExpanded = true;
+    l1.classList.add('expanded');
+    chev.classList.add('expanded');
+    l1.style.maxHeight = '';
+    l1.style.overflow = '';
+    l1.textContent = '';
+    this._typeFallbackText(l1);
+  }
+
+  _typeFallbackText(l1) {
+    const full = l1.dataset.fullText || '';
+    if (!full) return;
+    const parts = full.match(/\S+\s*/g) || [full];
+    // Same pacing as the BOM card: ~95ms/word, capped at ~2.6s total. The
+    // final tick sets the complete text so nothing is ever left unrevealed.
+    const PER_WORD_MS = 95;
+    const MAX_TOTAL_MS = 2600;
+    const intervalMs = Math.max(Math.min(PER_WORD_MS, MAX_TOTAL_MS / parts.length), 35);
+    const totalMs = parts.length * intervalMs;
+    let idx = 0;
+    this._descAnimUntil = Date.now() + totalMs + 100;
+    this._descTimer = setInterval(() => {
+      if (!l1.isConnected) {
+        clearInterval(this._descTimer);
+        this._descTimer = null;
+        this._descAnimUntil = 0;
+        return;
+      }
+      idx = Math.min(idx + 1, parts.length);
+      l1.textContent = idx >= parts.length ? full : parts.slice(0, idx).join('');
+      if (idx >= parts.length) {
+        clearInterval(this._descTimer);
+        this._descTimer = null;
+        this._descAnimUntil = 0;
+      }
+    }, intervalMs);
   }
 
   _render() {
@@ -557,8 +643,11 @@ class Dash4WeatherCard extends HTMLElement {
         </table>
 
         ${alertShow ? `
-        <div class="alert-lines${alert.is_warning ? ' warning' : ''}${alertCyclable ? ' tappable' : ''}">
-          <div class="l1"${!alert.is_warning ? ` data-full-text="${escapeHtml(alertLine1 || '')}"` : ''}>${escapeHtml(alertLine1 || '')}${alertCyclable ? ` <span class="count-inline">${escapeHtml(alertLine2)}</span>` : ''}</div>
+        <div class="alert-lines${alert.is_warning ? ' warning' : ''}${alertCyclable ? ' tappable' : ''}${(!alert.is_warning && !alertCyclable) ? ' fallback-tappable' : ''}">
+          <div class="l1-row">
+            <div class="l1${(!alert.is_warning && !alertCyclable && this._descExpanded) ? ' expanded' : ''}"${(!alert.is_warning && !alertCyclable) ? ` data-full-text="${escapeHtml(alertLine1 || '')}"` : ''}>${escapeHtml(alertLine1 || '')}${alertCyclable ? ` <span class="count-inline">${escapeHtml(alertLine2)}</span>` : ''}</div>
+            ${(!alert.is_warning && !alertCyclable) ? `<button class="alert-chevron${this._descExpanded ? ' expanded' : ''}" title="Show / hide full forecast">&#9660;</button>` : ''}
+          </div>
           ${(!alertCyclable && alertLine2) ? `<div class="l2">${escapeHtml(alertLine2)}</div>` : ''}
         </div>` : ''}
       </div>
@@ -572,6 +661,18 @@ class Dash4WeatherCard extends HTMLElement {
         this._alertIndex = (this._alertIndex + 1) % alertTitles.length;
         this._render();
       });
+    }
+
+    // No active warning — the bottom box holds the day's extended forecast.
+    // Tap the box (or its right-hand chevron) to expand the full text.
+    const fallbackBox = this.shadowRoot.querySelector('.alert-lines.fallback-tappable');
+    if (fallbackBox) {
+      fallbackBox.addEventListener('click', (e) => this._toggleFallbackText(e));
+    } else {
+      // Box replaced by a warning (or gone) — reset any expanded/typing state.
+      this._descExpanded = false;
+      this._descAnimUntil = 0;
+      if (this._descTimer) { clearInterval(this._descTimer); this._descTimer = null; }
     }
 
     const box3El = this.shadowRoot.querySelector('.box3');

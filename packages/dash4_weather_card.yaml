@@ -75,7 +75,6 @@ template:
             {% set uv = states(('sensor.' ~ wf ~ '_uv_index')) | float(0) %}
             {% set uv_rating = 'Low' if uv < 3 else 'Moderate' if uv < 6 else 'High' if uv < 8 else 'Very High' if uv < 11 else 'Extreme' %}
             {% set feels_str = (('%.1f' | format(feels)) ~ '°') if feels != 999 else '--' %}
-            {% set actual_str = (('%.1f' | format(actual)) ~ '°C') if actual != 999 else '--' %}
             {# Box-3 feels-like numeral color tier - same thresholds as box1_border above
                (10/14 cold, 27/30/35 hot - amber "notable" 27-29.9°C tier added 2026-07-19,
                hot side only, no cold-side equivalent yet), applied to the feels-like value
@@ -126,8 +125,8 @@ template:
               'lightning': {'label': 'Lightning', 'value': (lightning_count | string), 'sub': 'strikes/hr', 'cls': 'lightning', 'compact': false},
               'uv': {'label': ('UV · ' ~ uv_rating), 'value': (uv | round(0) | int | string), 'sub': '', 'cls': 'uv', 'compact': true},
               'feels_like': {'label': 'Feels Like', 'value': feels_str, 'sub': '', 'cls': feels_cls, 'compact': true},
-              'feels_colder': {'label': 'Feels Like', 'value': feels_str, 'sub': ('Actual ' ~ actual_str), 'cls': feels_cls, 'compact': false},
-              'feels_hotter': {'label': 'Feels Like', 'value': feels_str, 'sub': ('Actual ' ~ actual_str), 'cls': feels_cls, 'compact': false}
+              'feels_colder': {'label': 'Feels Like', 'value': feels_str, 'sub': '', 'cls': feels_cls, 'compact': true},
+              'feels_hotter': {'label': 'Feels Like', 'value': feels_str, 'sub': '', 'cls': feels_cls, 'compact': true}
             } }}
           rain_active: >-
             {# Rain must not just have a non-none intensity descriptor but also a nonzero
@@ -156,8 +155,7 @@ template:
               (actual > 23 and actual <= 25 and -gap >= 4) or
               (actual > 19 and actual <= 23 and -gap > 4) or
               (actual > 15 and actual <= 19 and -gap >= 3) or
-              (actual > 12 and actual <= 15 and -gap >= 2) or
-              (actual <= 12 and -gap >= 1)
+              (actual <= 15 and -gap >= 1)
             ) %}
             {% set hot_flag = gap > 0 and (
               (actual > 23 and actual <= 25 and gap >= 4) or
@@ -216,8 +214,7 @@ template:
               (actual > 23 and actual <= 25 and -gap >= 4) or
               (actual > 19 and actual <= 23 and -gap > 4) or
               (actual > 15 and actual <= 19 and -gap >= 3) or
-              (actual > 12 and actual <= 15 and -gap >= 2) or
-              (actual <= 12 and -gap >= 1)
+              (actual <= 15 and -gap >= 1)
             ) %}
             {% set hot_flag = gap > 0 and (
               (actual > 23 and actual <= 25 and gap >= 4) or
@@ -252,8 +249,7 @@ template:
                boundary, so between midnight and the next reissue index 0 can still be
                holding yesterday's now-stale data while index 1 has quietly become today.
                A naive "index 0 = Today" label would misreport every row by one day during
-               that ~5.5hr window every night.
-               different sensor pair - this is the DASH-4-specific fix, found 2026-07-17. #}
+               that ~5.5hr window every night - this is the DASH-4-specific fix, found 2026-07-17. #}
             {% set bom = states('input_text.dash4_bom_prefix') %}
             {% set icons = state_attr('sensor.dash4_forecast_icons', 'icons') | default(['mdi:weather-cloudy']*5, true) %}
             {% set hourly_today = state_attr('sensor.dash4_forecast_hourly_rain', 'hourly_rain_today') | default([], true) %}
@@ -465,6 +461,21 @@ template:
             {% for f in forecast %}
               {% set dt = as_datetime(f.datetime) %}
               {% if dt.date() == tomorrow %}
+                {% set hour12 = dt.hour if dt.hour <= 12 else dt.hour - 12 %}
+                {% set hour12 = 12 if hour12 == 0 else hour12 %}
+                {% set ampm = 'am' if dt.hour < 12 else 'pm' %}
+                {% set ns.out = ns.out + [{'time': (hour12 | string) ~ ampm, 'temp': (f.temperature | default(0) | float), 'prob': (f.precipitation_probability | default(0) | int), 'mm': (f.precipitation | default(0) | float)}] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.out }}
+          hourly_rain_day_after_tomorrow: >-
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set forecast = dash4_hourly_response.get('weather.' ~ bom ~ '_hourly', {}).get('forecast', []) %}
+            {% set day_after = now().date() + timedelta(days=2) %}
+            {% set ns = namespace(out=[]) %}
+            {% for f in forecast %}
+              {% set dt = as_datetime(f.datetime) %}
+              {% if dt.date() == day_after %}
                 {% set hour12 = dt.hour if dt.hour <= 12 else dt.hour - 12 %}
                 {% set hour12 = 12 if hour12 == 0 else hour12 %}
                 {% set ampm = 'am' if dt.hour < 12 else 'pm' %}
