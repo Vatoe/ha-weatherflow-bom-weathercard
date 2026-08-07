@@ -11,6 +11,26 @@ const ICON_MAP = {
   'windy': '💨', 'windy-variant': '💨', 'mdi:alert-circle-outline': '⚠️',
 };
 
+// Humanized label for the masthead byline, keyed by the same header_icon
+// values ICON_MAP uses. mdi:alert-circle-outline is a forecast-table-only
+// icon (not a header condition) and intentionally has no entry here.
+const CONDITION_LABEL_MAP = {
+  'sunny': 'Sunny',
+  'night': 'Clear',
+  'cloudy': 'Cloudy',
+  'partly-cloudy': 'Partly Cloudy',
+  'pouring': 'Heavy Rain',
+  'rainy': 'Showers',
+  'lightning': 'Thunderstorms',
+  'lightning-rainy': 'Thunderstorms',
+  'snowy': 'Snow',
+  'snowy-rainy': 'Snow Showers',
+  'fog': 'Fog',
+  'hail': 'Hail',
+  'windy': 'Windy',
+  'windy-variant': 'Windy',
+};
+
 const STYLE = `
   :host { display: block; }
   * { box-sizing: border-box; }
@@ -28,21 +48,36 @@ const STYLE = `
     color: var(--primary-text-color);
     font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
-  .title-line {
-    display: flex; flex-wrap: wrap; row-gap: 4px; justify-content: center;
-    align-items: baseline; gap: 8px; font-family: 'Helvetica Neue', Arial, sans-serif;
-    padding: 0 2px 5px; margin-bottom: 1px;
-  }
-  .title-line .tsep { font-size: 14px; font-weight: 300; color: var(--secondary-text-color); }
-  .title-divider { display: flex; align-items: center; margin-bottom: 18px; }
-  .title-divider .rule { flex: 1; height: 1px; background: linear-gradient(90deg, transparent 0%, var(--divider-color, rgba(255,255,255,0.16)) 16%, var(--divider-color, rgba(255,255,255,0.16)) 84%, transparent 100%); }
-  .title-line .place { font-size: 15px; font-weight: 300; letter-spacing: 1.6px; text-transform: uppercase; color: var(--primary-text-color); white-space: nowrap; }
-  .title-line .date, .title-line .time { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
-  .title-line .date { font-weight: 300; color: var(--primary-text-color); }
-  .title-line .time { font-weight: 900; color: var(--primary-text-color); }
+  .masthead-fallback { text-align: center; padding: 12px 2px; font-size: 14px; font-family: 'Helvetica Neue', Arial, sans-serif; color: var(--secondary-text-color); }
 
-  .box-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 8px; }
-  .box { background: var(--secondary-background-color, rgba(255,255,255,0.07)); border-radius: 12px; padding: 8px 10px; text-align: center; border: 1px solid var(--divider-color, rgba(255,255,255,0.10)); overflow: hidden; }
+  .masthead { padding: 0 2px 5px; font-family: 'Helvetica Neue', Arial, sans-serif; }
+  .masthead .eyebrow { text-align: center; font-size: 9.5px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #66D4CF; margin-bottom: 6px; }
+  .masthead .headline { text-align: center; font-family: Georgia, 'Times New Roman', serif; font-size: 21px; font-weight: 700; letter-spacing: 0.3px; color: var(--primary-text-color); margin-bottom: 4px; }
+  .masthead .byline { text-align: center; font-size: 12px; font-weight: 400; color: var(--secondary-text-color); letter-spacing: 0.5px; }
+  .masthead .byline .header-icon { margin-right: 4px; font-size: 13px; }
+  .masthead .byline .tsep { margin: 0 3px; }
+
+  .arc-wrap { position: relative; height: 40px; margin: 10px 0 4px; }
+  .arc-wrap svg { width: 100%; height: 100%; overflow: visible; display: block; }
+  .arc-fill { fill: none; stroke-width: 1.5; stroke-linecap: round; }
+  .arc-dot { position: absolute; transform: translate(-50%, -50%); font-size: 13px; line-height: 1; filter: drop-shadow(0 0 4px rgba(255,196,74,0.85)); }
+  .arc-dot.night { filter: drop-shadow(0 0 4px rgba(138,180,255,0.8)); }
+  .arc-label { position: absolute; bottom: -2px; font-size: 8.5px; color: var(--secondary-text-color); letter-spacing: 0.3px; }
+  .arc-label-start { left: 0; }
+  .arc-label-end { right: 0; }
+
+  .box-row { display: grid; grid-template-columns: 1fr 1fr 1fr; margin-bottom: 8px; }
+  .box { position: relative; padding: 8px 12px; text-align: center; }
+  .box + .box::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: 60%;
+    background: linear-gradient(to bottom, transparent, var(--divider-color, rgba(255,255,255,0.10)) 25%, var(--divider-color, rgba(255,255,255,0.10)) 75%, transparent);
+  }
   .box .label { font-size: 11.5px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
   .box .value { font-size: 26px; font-weight: 700; line-height: 1.05; color: var(--primary-text-color); }
   .box .sub { font-size: 12.5px; color: var(--secondary-text-color); margin-top: 2px; font-weight: 500; }
@@ -71,8 +106,8 @@ const STYLE = `
   .box.low-temp-teal .value, .box3.feels-colder-teal .value { color: #66D4CF; }
   @keyframes text-pulse-blue { 0%,100% { color: rgba(10,132,255,0.55); } 50% { color: rgba(10,132,255,1); } }
 
-  .box3.multi-extreme { border-color: rgba(255,159,10,0.55); animation: border-pulse-amber 2.5s ease-in-out infinite; }
-  @keyframes border-pulse-amber { 0%,100% { border-color: rgba(255,159,10,0.3); } 50% { border-color: rgba(255,159,10,0.85); } }
+  .box3.multi-extreme .value { animation: text-pulse-amber 2.5s ease-in-out infinite; }
+  @keyframes text-pulse-amber { 0%,100% { color: rgba(255,159,10,0.55); } 50% { color: rgba(255,159,10,1); } }
 
   table.forecast { width: 100%; border-collapse: collapse; font-size: 14.5px; margin-bottom: 4px; }
   table.forecast th { text-align: left; font-size: 10.5px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500; padding: 0 6px 3px; border-bottom: 1px solid var(--divider-color); }
@@ -168,10 +203,131 @@ function ordinal(n) {
   switch (n % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th'; }
 }
 
+// ---- Solar position (sunrise/sunset) ----
+// Julian-date based solar position formula (same approach as the widely-used
+// suncalc.js library) - anchored to a continuous time axis so it has no
+// day-boundary ambiguity for any longitude/timezone combination, unlike the
+// older "Almanac for Computers 1990" hour-angle formula (which requires
+// fragile manual UTC-day-anchoring that was tried and discarded during
+// planning - see plan Reference section above for the verification that
+// caught this). Self-contained, no external dependency, works identically
+// for every install of the public card via hass.config.latitude/longitude.
+const SUN_RAD = Math.PI / 180;
+const SUN_DAY_MS = 1000 * 60 * 60 * 24, SUN_J1970 = 2440588, SUN_J2000 = 2451545;
+
+function sunToJulian(date) { return date.valueOf() / SUN_DAY_MS - 0.5 + SUN_J1970; }
+function sunFromJulian(j) { return new Date((j + 0.5 - SUN_J1970) * SUN_DAY_MS); }
+function sunToDays(date) { return sunToJulian(date) - SUN_J2000; }
+function sunMeanAnomaly(d) { return SUN_RAD * (357.5291 + 0.98560028 * d); }
+function sunEclipticLongitude(M) {
+  const C = SUN_RAD * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
+  const P = SUN_RAD * 102.9372;
+  return M + C + P + Math.PI;
+}
+function sunDeclination(l) { return Math.asin(Math.sin(l) * Math.sin(23.4397 * SUN_RAD)); }
+function sunJulianCycle(d, lw) { return Math.round(d - 0.0009 - lw / (2 * Math.PI)); }
+function sunApproxTransit(Ht, lw, n) { return 0.0009 + (Ht + lw) / (2 * Math.PI) + n; }
+function sunTransitJ(ds, M, L) { return SUN_J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L); }
+function sunHourAngle(h, phi, d) {
+  return Math.acos((Math.sin(h) - Math.sin(phi) * Math.sin(d)) / (Math.cos(phi) * Math.cos(d)));
+}
+function sunSetJulian(h, lw, phi, dec, n, M, L) {
+  const w = sunHourAngle(h, phi, dec);
+  const a = sunApproxTransit(w, lw, n);
+  return sunTransitJ(a, M, L);
+}
+
+// Returns { sunrise: Date, sunset: Date } for the calendar day containing the
+// given instant, at the given latitude/longitude (degrees). `date` can be any
+// Date/time on the target local day - the calculation is instant-based, not
+// dependent on what time-of-day is passed in.
+function sunTimes(date, lat, lon) {
+  const lw = SUN_RAD * -lon;
+  const phi = SUN_RAD * lat;
+  const d = sunToDays(date);
+  const n = sunJulianCycle(d, lw);
+  const ds = sunApproxTransit(0, lw, n);
+  const M = sunMeanAnomaly(ds);
+  const L = sunEclipticLongitude(M);
+  const dec = sunDeclination(L);
+  const Jnoon = sunTransitJ(ds, M, L);
+  const h0 = -0.833 * SUN_RAD; // standard sunrise/sunset zenith incl. refraction
+  const Jset = sunSetJulian(h0, lw, phi, dec, n, M, L);
+  const Jrise = Jnoon - (Jset - Jnoon);
+  return { sunrise: sunFromJulian(Jrise), sunset: sunFromJulian(Jset) };
+}
+
+// ---- Moon phase ----
+const MOON_PHASE_EMOJI = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'];
+const MOON_SYNODIC_MONTH_DAYS = 29.530588;
+const MOON_KNOWN_NEW_MOON_MS = Date.UTC(2000, 0, 6, 18, 14); // 2000-01-06 18:14 UTC, a known new moon
+
+function moonPhaseEmoji(date) {
+  const daysSince = (date.getTime() - MOON_KNOWN_NEW_MOON_MS) / 86400000;
+  let phase = (daysSince % MOON_SYNODIC_MONTH_DAYS) / MOON_SYNODIC_MONTH_DAYS;
+  if (phase < 0) phase += 1;
+  const idx = Math.floor(phase * 8 + 0.5) % 8;
+  return MOON_PHASE_EMOJI[idx];
+}
+
+// ---- Day/night arc state ----
+// Decides whether "now" falls in today's daylight window or the current
+// night window, and returns the span + elapsed fraction the arc needs.
+// Handles all three cases: daytime; evening after today's sunset (night span
+// = today's sunset -> tomorrow's sunrise); and the pre-dawn hours before
+// today's sunrise (night span = yesterday's sunset -> today's sunrise).
+function computeArcState(now, lat, lon) {
+  const today = sunTimes(now, lat, lon);
+  if (today.sunrise && today.sunset && now >= today.sunrise && now < today.sunset) {
+    const frac = (now - today.sunrise) / (today.sunset - today.sunrise);
+    return { mode: 'day', start: today.sunrise, end: today.sunset, frac: Math.min(1, Math.max(0, frac)) };
+  }
+  let sunsetRef, sunriseRef;
+  if (today.sunset && now >= today.sunset) {
+    sunsetRef = today.sunset;
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 12);
+    sunriseRef = sunTimes(tomorrow, lat, lon).sunrise;
+  } else {
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12);
+    sunsetRef = sunTimes(yesterday, lat, lon).sunset;
+    sunriseRef = today.sunrise;
+  }
+  const frac = (sunsetRef && sunriseRef) ? (now - sunsetRef) / (sunriseRef - sunsetRef) : 0;
+  return { mode: 'night', start: sunsetRef, end: sunriseRef, frac: Math.min(1, Math.max(0, frac)) };
+}
+
+// ---- Arc geometry ----
+// Matches the arc's SVG path "M 20 32 Q 190 -4 360 32" in a 380x40 viewBox
+// (see Task 4). Keep ARC_P0/P1/P2 and the path's d= attribute in sync if
+// either is ever changed - they describe the same curve.
+const ARC_VIEWBOX_W = 380, ARC_VIEWBOX_H = 40;
+const ARC_P0 = { x: 20, y: 32 };
+const ARC_P1 = { x: 190, y: -4 };
+const ARC_P2 = { x: 360, y: 32 };
+
+function pointOnQuadratic(t, p0, p1, p2) {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x,
+    y: mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y,
+  };
+}
+
 function escapeHtml(str) {
   return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
+}
+
+// Shared h:mm AM/PM formatter - used by the masthead byline and the arc's
+// sunrise/sunset end labels. Extracted from the old inline _renderTitleOnly
+// logic so both call sites stay in sync.
+function formatTime(d) {
+  let h = d.getHours();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if (h === 0) h = 12;
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m} ${ampm}`;
 }
 
 // Fixed per-hour column width for the hourly rain graph (and its aligned
@@ -370,7 +526,6 @@ class Dash4WeatherCard extends HTMLElement {
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
   // cyclable, and the fallback forecast text can expand to its full length).
-  // Same pattern used by mushroom.js for its own variable-height cards.
   getGridOptions() {
     return { columns: 12 };
   }
@@ -412,18 +567,55 @@ class Dash4WeatherCard extends HTMLElement {
   }
 
   _renderTitleOnly() {
-    const dateEl = this.shadowRoot.querySelector('.date');
-    const timeEl = this.shadowRoot.querySelector('.time');
-    if (!dateEl || !timeEl) return;
+    const headlineEl = this.shadowRoot.querySelector('.masthead .headline');
+    const bylineTimeEl = this.shadowRoot.querySelector('.masthead .byline-time');
+    if (!headlineEl || !bylineTimeEl) return;
+
     const n = new Date();
-    const dayName = n.toLocaleDateString('en-AU', { weekday: 'short' });
+    const dayName = n.toLocaleDateString('en-AU', { weekday: 'long' });
     const month = n.toLocaleDateString('en-AU', { month: 'long' });
-    dateEl.textContent = `${dayName} ${n.getDate()}${ordinal(n.getDate())} ${month}`;
-    let h = n.getHours();
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12; if (h === 0) h = 12;
-    const m = String(n.getMinutes()).padStart(2, '0');
-    timeEl.textContent = `${h}:${m} ${ampm}`;
+    headlineEl.textContent = `${dayName}, ${n.getDate()}${ordinal(n.getDate())} ${month}`;
+    bylineTimeEl.textContent = formatTime(n);
+
+    const bylineCondEl = this.shadowRoot.querySelector('.masthead .byline-condition');
+    if (bylineCondEl) {
+      const condKey = this._lastHeaderIconKey || '';
+      bylineCondEl.textContent = CONDITION_LABEL_MAP[condKey]
+        || condKey.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+        || 'Weather';
+    }
+
+    // Arc needs real coordinates from hass.config - not available before the
+    // first set hass() call, and this function also runs from the 30s clock
+    // timer independent of any hass update, so guard defensively.
+    if (!this._hass || !this._hass.config) return;
+    const lat = this._hass.config.latitude;
+    const lon = this._hass.config.longitude;
+    if (lat == null || lon == null) return;
+
+    const dotEl = this.shadowRoot.querySelector('.arc-dot');
+    const labelStartEl = this.shadowRoot.querySelector('.arc-label-start');
+    const labelEndEl = this.shadowRoot.querySelector('.arc-label-end');
+    const stopA = this.shadowRoot.querySelector('.arc-stop-a');
+    const stopB = this.shadowRoot.querySelector('.arc-stop-b');
+    const stopC = this.shadowRoot.querySelector('.arc-stop-c');
+    if (!dotEl) return;
+
+    const state = computeArcState(n, lat, lon);
+    const isNight = state.mode === 'night';
+    const pt = pointOnQuadratic(state.frac, ARC_P0, ARC_P1, ARC_P2);
+    dotEl.style.left = `${(pt.x / ARC_VIEWBOX_W) * 100}%`;
+    dotEl.style.top = `${(pt.y / ARC_VIEWBOX_H) * 100}%`;
+    dotEl.textContent = isNight ? moonPhaseEmoji(n) : '☀️';
+    dotEl.classList.toggle('night', isNight);
+    if (labelStartEl) labelStartEl.textContent = state.start ? formatTime(state.start) : '';
+    if (labelEndEl) labelEndEl.textContent = state.end ? formatTime(state.end) : '';
+    if (stopA && stopB && stopC) {
+      const colors = isNight ? ['#3a4a7a', '#8ab4ff', '#3a4a7a'] : ['#8ab4ff', '#ffce6b', '#8ab4ff'];
+      stopA.setAttribute('stop-color', colors[0]);
+      stopB.setAttribute('stop-color', colors[1]);
+      stopC.setAttribute('stop-color', colors[2]);
+    }
   }
 
   // Fits the no-warning fallback box's text (BOM extended_text_0, set as
@@ -525,12 +717,12 @@ class Dash4WeatherCard extends HTMLElement {
 
   _render() {
     if (!this._hass) {
-      this.shadowRoot.innerHTML = `<style>${STYLE}</style><div class="card"><div class="title-line">Loading&hellip;</div></div>`;
+      this.shadowRoot.innerHTML = `<style>${STYLE}</style><div class="card"><div class="masthead-fallback">Loading&hellip;</div></div>`;
       return;
     }
     const entity = this._hass.states[this._entityId];
     if (!entity) {
-      this.shadowRoot.innerHTML = `<style>${STYLE}</style><div class="card"><div class="title-line">${escapeHtml(this._entityId)} unavailable</div></div>`;
+      this.shadowRoot.innerHTML = `<style>${STYLE}</style><div class="card"><div class="masthead-fallback">${escapeHtml(this._entityId)} unavailable</div></div>`;
       return;
     }
     const a = entity.attributes;
@@ -550,6 +742,10 @@ class Dash4WeatherCard extends HTMLElement {
     if ((parseInt(a.extreme_count, 10) || 0) >= 2) box3Classes += ' multi-extreme';
 
     const box1Class = 'box box1 tappable' + (a.box1_border && a.box1_border !== 'neutral' ? ' ' + a.box1_border : '');
+
+    const headerIconKey = (a.header_icon || '').trim();
+    const headerIcon = ICON_MAP[headerIconKey] || '🌤️';
+    this._lastHeaderIconKey = headerIconKey;
 
     const forecastRows = a.forecast_rows || [];
     const hourlyToday = a.hourly_rain_today || [];
@@ -612,14 +808,31 @@ class Dash4WeatherCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>${STYLE}</style>
       <div class="card">
-        <div class="title-line">
-          <span class="place">${escapeHtml(this._placeName)}</span>
-          <span class="tsep">&middot;</span>
-          <span class="date"></span>
-          <span class="tsep">&middot;</span>
-          <span class="time"></span>
+        <div class="masthead">
+          <div class="eyebrow">Local Weather</div>
+          <div class="headline"></div>
+          <div class="byline">
+            <span class="header-icon">${headerIcon}</span>
+            <span class="byline-time"></span>
+            <span class="tsep">&middot;</span>
+            <span class="byline-condition"></span>
+          </div>
         </div>
-        <div class="title-divider"><span class="rule"></span></div>
+        <div class="arc-wrap">
+          <svg viewBox="0 0 380 40" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="dash4ArcGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop class="arc-stop-a" offset="0%" stop-color="#8ab4ff"/>
+                <stop class="arc-stop-b" offset="50%" stop-color="#ffce6b"/>
+                <stop class="arc-stop-c" offset="100%" stop-color="#8ab4ff"/>
+              </linearGradient>
+            </defs>
+            <path class="arc-fill" stroke="url(#dash4ArcGrad)" d="M 20 32 Q 190 -4 360 32"/>
+          </svg>
+          <div class="arc-dot"></div>
+          <div class="arc-label arc-label-start"></div>
+          <div class="arc-label arc-label-end"></div>
+        </div>
 
         <div class="box-row">
           <div class="${box1Class}">

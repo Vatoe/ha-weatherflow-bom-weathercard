@@ -6,6 +6,12 @@ A custom Lovelace card for Australian Home Assistant users running a **WeatherFl
 
 ## Features
 
+### Header — masthead + live sun/moon arc
+
+The header is a small eyebrow label, a serif date headline, and a byline (condition icon, time, and a plain-language condition word — "Partly Cloudy", "Showers", etc. — derived from the same condition detection used elsewhere on the card). Underneath it, a thin arc tracks the sun's position across today's daylight hours — a glowing dot slides from sunrise to sunset as the day progresses, with the two times labelled at each end. After dark it swaps automatically to the *current night's* span (tonight's sunset through tomorrow's sunrise, or last night's sunset through this morning's sunrise before dawn) with a moon in place of the sun — and the moon shown is phase-accurate, not just a generic icon, so a new moon looks new and a full moon looks full.
+
+Sunrise, sunset, and moon phase are all worked out **on your own device**, from your Home Assistant instance's configured latitude/longitude — no extra sensor, integration, or API key needed, and nothing is sent anywhere to calculate it. This also means it's correct for wherever you're running the card, not just this card's original household.
+
 ### Box 1 / Box 2 — Temp & Humidity
 
 Live temperature and humidity from your WeatherFlow station, falling back to BOM data if the station goes offline. These update reactively, immediately reflecting whatever your WeatherFlow station's own sensors report — there's no polling interval controlled by this card, it just re-renders the instant the underlying entity changes.
