@@ -1,5 +1,6 @@
 {
   "name": "DASH-4 Weather Card (WeatherFlow + BOM)",
   "render_readme": true,
-  "filename": "ha-weatherflow-bom-weathercard.js"
+  "filename": "ha-weatherflow-bom-weathercard.js",
+  "country": "AU"
 }
