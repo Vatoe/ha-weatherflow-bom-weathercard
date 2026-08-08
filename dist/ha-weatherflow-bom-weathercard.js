@@ -90,6 +90,8 @@ const STYLE = `
   .box1.tappable:active, .box2.tappable:active { transform: scale(0.97); transition: transform 0.08s; }
 
   .box3.rain .value { color: #66D4CF; }
+  .box3.aqi-poor .value { color: #FF9F0A; }
+  .box3.aqi-severe .value { color: #FF453A; animation: text-pulse-red 4s ease-in-out infinite; }
   .box3.lightning .value, .box3.wind-notable .value { color: #FF9F0A; }
   .box.high-temp-notable .value, .box3.feels-hotter-notable .value { color: #FF9F0A; }
   .box3.high-wind .value, .box3.uv-extreme .value,
@@ -526,6 +528,7 @@ class Dash4WeatherCard extends HTMLElement {
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
   // cyclable, and the fallback forecast text can expand to its full length).
+  // See docs/reference/best-practices/lovelace-custom-cards.md.
   getGridOptions() {
     return { columns: 12 };
   }

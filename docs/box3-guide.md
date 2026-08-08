@@ -1,10 +1,10 @@
 # Box 3 — How the Auto-Priority Reading Works
 
-Box 3 shows one reading at a time out of seven possible metrics (Wind, Rain,
-Lightning, UV, and three Feels-Like variants). In **Auto** mode it picks
-whichever one is most worth your attention right now, using a fixed priority
-order re-evaluated every time any underlying sensor changes — there's no
-polling interval or hold timer involved in the *selection* itself.
+Box 3 shows one reading at a time out of eight possible metrics (Wind, Rain,
+Lightning, UV, Air Quality, and three Feels-Like variants). In **Auto** mode
+it picks whichever one is most worth your attention right now, using a fixed
+priority order re-evaluated every time any underlying sensor changes —
+there's no polling interval or hold timer involved in the *selection* itself.
 
 ## The priority cascade
 
@@ -12,44 +12,65 @@ polling interval or hold timer involved in the *selection* itself.
 flowchart TD
     Start(["Box 3 recomputes<br/>(any underlying sensor changed)"]) --> Manual{"Manual pin<br/>active?"}
     Manual -->|"Yes (tap-to-cycle)"| ShowManual["Show the pinned reading<br/>(colour/pulse rules below still apply)"]
-    Manual -->|"No — Auto"| P1{"Gust ≥ 60 km/h?"}
-    P1 -->|Yes| Wind["🔴 Wind — pulsing red"]
-    P1 -->|No| P2{"'Feels colder' gap<br/>notable for this temp?"}
-    P2 -->|Yes| Cold["🔵 Feels Colder"]
-    P2 -->|No| P3{"'Feels hotter' gap<br/>notable for this temp?"}
-    P3 -->|Yes| Hot["🔴 Feels Hotter"]
-    P3 -->|No| P4{"Rain intensity<br/>= Extreme?"}
-    P4 -->|Yes| RainExt["🔴 Rain — pulsing red"]
-    P4 -->|No| P5{"Lightning ≥ 10<br/>strikes in last hour?"}
-    P5 -->|Yes| LightExt["🔴 Lightning — pulsing red"]
-    P5 -->|No| P6{"UV index ≥ 11<br/>(Extreme rating)?"}
-    P6 -->|Yes| UvExt["🔴 UV — pulsing red"]
-    P6 -->|No| P7{"Any rain<br/>falling right now?"}
-    P7 -->|Yes| RainAct["🟦 Rain — teal"]
-    P7 -->|No| P8{"Any lightning<br/>in the last hour?"}
-    P8 -->|Yes| LightAct["🟠 Lightning — amber"]
-    P8 -->|No| WindDefault["🌬️ Wind (default fallback)<br/>≥ 20 km/h gust → amber 'Gusting'"]
+    Manual -->|"No — Auto"| P1{"Air quality Very Poor<br/>or Extremely Poor?"}
+    P1 -->|Yes| AqiSevere["🔴 Air Quality — pulsing red"]
+    P1 -->|No| P2{"Gust ≥ 60 km/h?"}
+    P2 -->|Yes| Wind["🔴 Wind — pulsing red"]
+    P2 -->|No| P3{"'Feels colder' gap<br/>notable for this temp?"}
+    P3 -->|Yes| Cold["🔵 Feels Colder"]
+    P3 -->|No| P4{"'Feels hotter' gap<br/>notable for this temp?"}
+    P4 -->|Yes| Hot["🔴 Feels Hotter"]
+    P4 -->|No| P5{"Rain intensity<br/>= Extreme?"}
+    P5 -->|Yes| RainExt["🔴 Rain — pulsing red"]
+    P5 -->|No| P6{"Lightning ≥ 10<br/>strikes in last hour?"}
+    P6 -->|Yes| LightExt["🔴 Lightning — pulsing red"]
+    P6 -->|No| P7{"UV index ≥ 11<br/>(Extreme rating)?"}
+    P7 -->|Yes| UvExt["🔴 UV — pulsing red"]
+    P7 -->|No| P8{"Air quality<br/>= Poor?"}
+    P8 -->|Yes| AqiPoor["🟠 Air Quality — amber"]
+    P8 -->|No| P9{"Any rain<br/>falling right now?"}
+    P9 -->|Yes| RainAct["🟦 Rain — teal"]
+    P9 -->|No| P10{"Any lightning<br/>in the last hour?"}
+    P10 -->|Yes| LightAct["🟠 Lightning — amber"]
+    P10 -->|No| WindDefault["🌬️ Wind (default fallback)<br/>≥ 20 km/h gust → amber 'Gusting'"]
 ```
 
 Every box below `P1` only gets checked if everything above it was `No` — so a
 genuine extreme (say, a 65 km/h gust) always wins over a merely-active
 condition (say, light rain), no matter which order they started or how long
-either has been going. Wind is the only metric with **no** "merely active"
-tier at all: a 35 km/h gust (notable, but under the 60 km/h extreme cutoff)
-will never outrank active rain or lightning on its own — it only ever shows
-up as the extreme case at the top, or as the fallback at the bottom. To see a
-non-extreme elevated wind reading you'd tap to it manually.
+either has been going. **Air quality's severe tier (`P1`) sits above even a
+high wind gust** — it's the single highest-priority thing this card can show.
+Wind is the only metric with **no** "merely active" tier at all: a 35 km/h
+gust (notable, but under the 60 km/h extreme cutoff) will never outrank
+active rain or lightning on its own — it only ever shows up as the extreme
+case near the top, or as the fallback at the bottom. To see a non-extreme
+elevated wind reading you'd tap to it manually.
+
+**Air quality is optional and NSW-only** (see the main README) — with no
+site configured, or 7+ days of API silence, `P1`/`P8` are always `No` and
+the reading is skipped entirely, cascade behaving exactly as it did before
+this feature existed.
 
 ## Reference table
 
 | Metric | "Merely active" condition | "Extreme" condition | Colour (active) | Colour (extreme) |
 |---|---|---|---|---|
+| Air Quality | *(none — see note below)* | Category Poor (amber) · Very Poor/Extremely Poor (red, highest priority of all) | — | 🟠 Amber (Poor) / 🔴 Red, pulsing (Very Poor+) |
 | Wind | *(none — see note above)* | Gust ≥ 60 km/h | — | 🔴 Red, pulsing |
 | Feels Colder | *(same as extreme — single threshold)* | Gap below actual temp exceeds a sliding scale (see below) | — | 🔵 Blue (pulses only if actual < 10°C) |
 | Feels Hotter | *(same as extreme — single threshold)* | Gap above actual temp exceeds a sliding scale (see below) | — | 🟠 Amber at 27–29.9°C, then 🔴 Red from 30°C (pulses only if actual ≥ 35°C) — see note below |
 | Rain | Any measurable rain (rate > 0 with a real intensity descriptor) | WeatherFlow's own "Extreme" intensity descriptor | 🟦 Teal | 🔴 Red, pulsing |
 | Lightning | ≥ 1 strike in the last hour | ≥ 10 strikes in the last hour | 🟠 Amber | 🔴 Red, pulsing |
 | UV | *(same as extreme — single threshold)* | Index ≥ 11 (standard "Extreme" UV rating) | — | 🔴 Red, pulsing |
+
+**Air Quality has two tiers but neither is a "merely active" state in the
+usual sense** — unlike Rain/Lightning, there's no separate active-but-not-extreme
+flag checked in a second pass. Both Poor and Very Poor/Extremely Poor are
+checked directly in the same extreme-priority pass, just at very different
+positions in it (`P1` and `P8`) — a genuinely severe reading always wins the
+race regardless of what else is going on, while a merely-Poor reading only
+surfaces once every hotter-priority condition above it (wind, feels-like,
+rain/lightning extremes, UV extreme) has already come back `No`.
 
 **Two separate things use similar-sounding thresholds for Feels Colder/Hotter
 — don't conflate them.** The sliding-scale gap table just below decides
@@ -111,11 +132,13 @@ looking at."
 
 Tap Box 3 to step through readings yourself instead of trusting Auto:
 
-**wind → rain → lightning → UV → feels-like → wind → ...**
+**wind → rain → lightning → UV → feels-like → air quality → wind → ...**
 
-Wind and Feels-Like are always reachable; Rain, Lightning, and UV are
-automatically skipped in the cycle whenever they're currently inactive/zero,
-so a tap never lands you on an empty "0 strikes" reading. All the same
+Wind and Feels-Like are always reachable; Rain, Lightning, UV, and Air
+Quality are automatically skipped in the cycle whenever they're currently
+inactive/zero/unconfigured, so a tap never lands you on an empty "0 strikes"
+reading. Air Quality is additionally skipped if no site is configured, or if
+the source API has been silent for 7+ consecutive days. All the same
 colour/pulse rules from the table above still apply to whatever you've
 manually pinned. A manual pin reverts to Auto after 1 minute of inactivity,
 on a double-tap, or immediately if a genuinely new extreme condition becomes

@@ -1,14 +1,16 @@
 # DASH-4 Weather Card — Box 3 tap-to-cycle interaction
 #
 # Optional but recommended: without this, the card's rotating third box (wind/
-# rain/lightning/uv/feels-like) still displays and auto-prioritizes correctly,
-# but tapping it won't do anything. With it installed, a single tap cycles
-# through whichever conditions are currently active, and a double tap (or a
-# 1-minute timeout, or a genuine new condition becoming active) resets it back
-# to automatic.
+# rain/lightning/uv/feels-like/air quality) still displays and auto-prioritizes
+# correctly, but tapping it won't do anything. With it installed, a single tap
+# cycles through whichever conditions are currently active, and a double tap
+# (or a 1-minute timeout, or a genuine new condition becoming active) resets
+# it back to automatic.
 #
 # Assumes the main card's sensor is named sensor.dash4_weather_card and the
-# two prefix helpers from dash4_public_config.yaml already exist (see README).
+# prefix/AQ-site helpers from dash4_public_config.yaml already exist (see
+# README). Air quality is skipped from the cycle if dash4_aq_site_id is
+# unset or the API has been stale for 7+ days (packages/dash4_air_quality.yaml).
 
 timer:
   dash4_box3_revert:
@@ -25,6 +27,7 @@ input_select:
       - lightning
       - uv
       - feels_like
+      - air_quality
 
 script:
   dash4_box3_tap:
@@ -35,13 +38,18 @@ script:
           lightning_active: "{{ state_attr('sensor.dash4_weather_card', 'lightning_active') }}"
           wf: "{{ states('input_text.dash4_weatherflow_prefix') }}"
           uv_active: "{{ states(('sensor.' ~ wf ~ '_uv_index')) | float(0) > 0 }}"
+          aqi_configured: "{{ states('input_text.dash4_aq_site_id') not in ['unknown', 'unavailable', ''] }}"
+          aqi_last_good: "{{ states('sensor.dash4_aq_last_good_reading') }}"
+          aqi_stale: >-
+            {{ aqi_last_good not in ['unknown', 'unavailable'] and (now() - as_datetime(aqi_last_good)).days >= 7 }}
           active_cycle: >-
-            {% set base = ['wind', 'rain', 'lightning', 'uv', 'feels_like'] %}
+            {% set base = ['wind', 'rain', 'lightning', 'uv', 'feels_like', 'air_quality'] %}
             {% set ns = namespace(out=[]) %}
             {% for r in base %}
               {% if r == 'rain' and not rain_active %}
               {% elif r == 'lightning' and not lightning_active %}
               {% elif r == 'uv' and not uv_active %}
+              {% elif r == 'air_quality' and (not aqi_configured or aqi_stale) %}
               {% else %}
                 {% set ns.out = ns.out + [r] %}
               {% endif %}

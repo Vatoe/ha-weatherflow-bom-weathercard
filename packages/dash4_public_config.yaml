@@ -12,3 +12,11 @@ input_text:
                                                 # weather.<this> entity's entity_id, and the sensor.<this>_temp_max_0
                                                 # style forecast entities it creates alongside it.
     max: 255
+  dash4_aq_site_id:
+    name: "Dash4 AQ Site ID"
+    initial: ""                                # optional - leave blank to disable the Air Quality reading entirely,
+                                                # no errors, nothing shows on the card. To enable: find your nearest
+                                                # monitoring site's numeric ID via a GET to
+                                                # https://data.airquality.nsw.gov.au/api/Data/get_SiteDetails
+                                                # (NSW only - see packages/dash4_air_quality.yaml).
+    max: 255

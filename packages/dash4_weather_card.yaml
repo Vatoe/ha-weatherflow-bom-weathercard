@@ -126,7 +126,18 @@ template:
               'uv': {'label': ('UV · ' ~ uv_rating), 'value': (uv | round(0) | int | string), 'sub': '', 'cls': 'uv', 'compact': true},
               'feels_like': {'label': 'Feels Like', 'value': feels_str, 'sub': '', 'cls': feels_cls, 'compact': true},
               'feels_colder': {'label': 'Feels Like', 'value': feels_str, 'sub': '', 'cls': feels_cls, 'compact': true},
-              'feels_hotter': {'label': 'Feels Like', 'value': feels_str, 'sub': '', 'cls': feels_cls, 'compact': true}
+              'feels_hotter': {'label': 'Feels Like', 'value': feels_str, 'sub': '', 'cls': feels_cls, 'compact': true},
+              'air_quality': {
+                'label': 'Air Quality',
+                'value': (state_attr('sensor.dash4_air_quality', 'value') | string) if state_attr('sensor.dash4_air_quality', 'value') is not none else '--',
+                'sub': (
+                  ((state_attr('sensor.dash4_air_quality', 'pollutant') | string) ~ ' · ' ~ (state_attr('sensor.dash4_air_quality', 'category') | string))
+                  if state_attr('sensor.dash4_air_quality', 'category')
+                  else ('API Offline' if states('input_text.dash4_aq_site_id') not in ['unknown', 'unavailable', ''] else '')
+                ),
+                'cls': 'aqi-severe' if state_attr('sensor.dash4_air_quality', 'category') in ['Very Poor', 'Extremely Poor'] else ('aqi-poor' if state_attr('sensor.dash4_air_quality', 'category') == 'Poor' else ''),
+                'compact': false
+              }
             } }}
           rain_active: >-
             {# Rain must not just have a non-none intensity descriptor but also a nonzero
@@ -146,6 +157,18 @@ template:
           lightning_extreme: >-
             {% set wf = states('input_text.dash4_weatherflow_prefix') %}
             {{ states(('sensor.' ~ wf ~ '_lightning_count_last_hour')) | int(0) >= 10 }}
+          aqi_category: >-
+            {{ state_attr('sensor.dash4_air_quality', 'category') }}
+          aqi_pollutant: >-
+            {{ state_attr('sensor.dash4_air_quality', 'pollutant') }}
+          aqi_value: >-
+            {{ state_attr('sensor.dash4_air_quality', 'value') }}
+          aqi_units: >-
+            {{ state_attr('sensor.dash4_air_quality', 'units') }}
+          aqi_poor: >-
+            {{ state_attr('sensor.dash4_air_quality', 'category') == 'Poor' }}
+          aqi_severe: >-
+            {{ state_attr('sensor.dash4_air_quality', 'category') in ['Very Poor', 'Extremely Poor'] }}
           box3_mode: >-
             {% set wf = states('input_text.dash4_weatherflow_prefix') %}
             {% set actual = states(('sensor.' ~ wf ~ '_temperature')) | float(999) %}
@@ -171,13 +194,17 @@ template:
                light rain) - previously "extreme" only affected coloring of whichever reading
                already won the plain active-priority race below, wind especially could never
                surface on its own merit since it wasn't in that race at all (fallback only). #}
+            {% set aqi_severe_flag = this.attributes.get('aqi_severe', false) %}
+            {% set aqi_poor_flag = this.attributes.get('aqi_poor', false) %}
             {% set extreme_priorities = [
+              {'name': 'air_quality', 'active': aqi_severe_flag},
               {'name': 'wind', 'active': this.attributes.get('high_wind_gust', false)},
               {'name': 'feels_colder', 'active': cold_flag},
               {'name': 'feels_hotter', 'active': hot_flag},
               {'name': 'rain', 'active': this.attributes.get('rain_extreme', false)},
               {'name': 'lightning', 'active': this.attributes.get('lightning_extreme', false)},
-              {'name': 'uv', 'active': uv_active}
+              {'name': 'uv', 'active': uv_active},
+              {'name': 'air_quality', 'active': aqi_poor_flag}
             ] %}
             {% set active_priorities = [
               {'name': 'feels_colder', 'active': cold_flag},
@@ -223,7 +250,7 @@ template:
               (actual > 35 and gap >= 1)
             ) %}
             {% set uv_extreme = states(('sensor.' ~ wf ~ '_uv_index')) | float(0) >= 11 %}
-            {{ (cold_flag | int) + (hot_flag | int) + (this.attributes.get('high_wind_gust', false) | int) + (this.attributes.get('rain_extreme', false) | int) + (this.attributes.get('lightning_extreme', false) | int) + (uv_extreme | int) }}
+            {{ (cold_flag | int) + (hot_flag | int) + (this.attributes.get('high_wind_gust', false) | int) + (this.attributes.get('rain_extreme', false) | int) + (this.attributes.get('lightning_extreme', false) | int) + (uv_extreme | int) + ((this.attributes.get('aqi_poor', false) or this.attributes.get('aqi_severe', false)) | int) }}
           box3_effective_mode: >-
             {% set manual = states('input_select.dash4_box3_reading') %}
             {{ manual if manual not in ['auto', 'unknown', 'unavailable'] else this.attributes.get('box3_mode', 'wind') }}
@@ -333,6 +360,43 @@ template:
               {% endfor %}
               {{ ns.heavy }}
             {% endif %}
+          header_icon: >-
+            {% set wf = states('input_text.dash4_weatherflow_prefix') %}
+            {% set bom = states('input_text.dash4_bom_prefix') %}
+            {% set wf_rain = states(('sensor.' ~ wf ~ '_rain_rate')) | float(0) if wf not in ['unknown', 'unavailable', ''] else 0 %}
+            {% set cond_map = {
+              'clear-night': 'night', 'cloudy': 'cloudy', 'fog': 'fog', 'hail': 'hail',
+              'lightning': 'lightning', 'lightning-rainy': 'lightning-rainy',
+              'partlycloudy': 'partly-cloudy', 'pouring': 'pouring', 'rainy': 'rainy',
+              'snowy': 'snowy', 'snowy-rainy': 'snowy-rainy', 'sunny': 'sunny',
+              'windy': 'windy', 'windy-variant': 'windy-variant'
+            } %}
+            {% if wf_rain > 0 %}
+              rainy
+            {% else %}
+              {% set bom_cond = states(('weather.' ~ bom)) %}
+              {% if bom_cond in cond_map %}
+                {{ cond_map[bom_cond] }}
+              {% else %}
+                {% set outlook = states(('sensor.' ~ bom ~ '_short_text_0')) | lower %}
+                {% set icon_keywords = [
+                  (['thunderstorm', 'storm'], 'lightning'),
+                  (['hail'], 'hail'),
+                  (['snow'], 'snowy'),
+                  (['shower', 'rain', 'drizzle'], 'rainy'),
+                  (['fog', 'mist', 'haze'], 'fog'),
+                  (['wind', 'gust'], 'windy'),
+                  (['partly cloudy', 'partly sunny'], 'partly-cloudy'),
+                  (['cloudy', 'overcast'], 'cloudy'),
+                  (['sunny', 'clear'], 'sunny'),
+                ] %}
+                {% set ns = namespace(matched=none) %}
+                {% for keywords, mapped in icon_keywords if ns.matched is none %}
+                  {% if keywords | select('in', outlook) | list | length > 0 %}{% set ns.matched = mapped %}{% endif %}
+                {% endfor %}
+                {{ ns.matched if ns.matched is not none else 'cloudy' }}
+              {% endif %}
+            {% endif %}
           alert_lines: >-
             {% set bom = states('input_text.dash4_bom_prefix') %}
             {% set warnings = state_attr(('sensor.' ~ bom ~ '_warnings'), 'warnings') | default([], true) %}
@@ -355,7 +419,12 @@ template:
               {% set line2 = ('+' ~ extra ~ ' more active warning' ~ ('s' if extra > 1 else '')) if extra > 0 else '' %}
               {{ {'line1': ns.titles[0], 'line2': line2, 'is_warning': true, 'titles': ns.titles} }}
             {%- else %}
-              {% set extended = states(('sensor.' ~ bom ~ '_extended_text_0')) %}
+              {# The bureau_of_meteorology integration truncates the top-level state at
+                 HA's 255-char limit but duplicates the full text into an attribute
+                 literally named 'state' - read that first, or long forecasts render cut
+                 off mid-sentence when expanded. #}
+              {% set extended_id = ('sensor.' ~ bom ~ '_extended_text_0') %}
+              {% set extended = state_attr(extended_id, 'state') | default(states(extended_id), true) %}
               {% set fallback_text = extended if extended not in ['unavailable', 'unknown', ''] else states(('sensor.' ~ bom ~ '_short_text_0')) %}
               {{ {'line1': fallback_text, 'line2': '', 'is_warning': false, 'titles': []} }}
             {%- endif %}

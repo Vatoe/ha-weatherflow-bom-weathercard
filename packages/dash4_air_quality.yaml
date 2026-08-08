@@ -1,0 +1,162 @@
+# DASH-4 Weather Card — Air Quality data source (optional)
+#
+# Pulls NSW DPIE Air Quality API observations for one configured monitoring
+# site over a rolling yesterday+today window, keeps only the worst-category
+# pollutant in the NEWEST available hour, and exposes it for
+# packages/dash4_weather_card.yaml's Box 3 logic to read. Fully optional:
+# leave input_text.dash4_aq_site_id blank (dash4_public_config.yaml) and this
+# entire feature no-ops - no errors, no entities showing anything, nothing
+# appears on the card.
+#
+# Note on the rolling window: the NSW API publishes with roughly a one-day
+# lag (no today data for many hours into the day), so a today-only query
+# would show "API Offline" for most of each day. Querying yesterday+today
+# always returns something once the API has caught up; ranking is restricted
+# to the newest available (Date, Hour) so yesterday's worst event can't
+# masquerade as today's air quality.
+#
+# API docs: https://data.airquality.nsw.gov.au/docs/index.html - no API key,
+# no registration, fully open. Find your own site_id via a GET to
+# https://data.airquality.nsw.gov.au/api/Data/get_SiteDetails.
+#
+# Implementation note (HA 2026.7.4): the rest platform no longer supports
+# json_attributes_template, so the ranking can't run in a template attribute.
+# The ranking picks the worst-category pollutant in the NEWEST available hour
+# of the rolling window (see note above).
+# Instead this file uses a two-sensor chain: the rest: sensor does the
+# ranking in its value_template and stores the worst-pollutant dict as a JSON
+# string in its state, then a trigger-based template sensor (sensor.
+# dash4_air_quality) re-exposes it as real attributes that downstream code
+# reads with state_attr(). The request body uses payload_template (payload:
+# is a static string only).
+
+rest:
+  - resource: "https://data.airquality.nsw.gov.au/api/Data/get_Observations"
+    method: POST
+    headers:
+      Content-Type: application/json
+    payload_template: >-
+      {% set site = states('input_text.dash4_aq_site_id') %}
+      {% set site_valid = site not in ['unknown', 'unavailable', ''] %}
+      {{
+        {
+          "Parameters": [],
+          "Sites": [site | int] if site_valid else [],
+          "StartDate": (now() - timedelta(days=1)).strftime('%Y-%m-%d'),
+          "EndDate": now().strftime('%Y-%m-%d'),
+          "Categories": ["Averages"],
+          "Subcategories": ["Hourly"],
+          "Frequency": ["Hourly average"]
+        } | tojson
+      }}
+    scan_interval: 3600
+    timeout: 30
+    sensor:
+      - name: "Dash4 Air Quality Raw"
+        unique_id: dash4_air_quality_raw
+        value_template: >-
+          {# Rolling window returns rows from both days; rank ONLY within the
+             newest (Date, Hour) present, so a prior day's bad event can't
+             masquerade as current conditions. The API's Date is "yyyy-MM-dd"
+             (ISO, sorts chronologically) and Hour is int 1-24 AEST. #}
+          {% set rows = value_json if value_json is sequence and value_json is not string else [] %}
+          {% set ns = namespace(newest=none) %}
+          {% for obs in rows %}
+            {% set stamp = (obs.Date, obs.Hour) %}
+            {% if ns.newest is none or stamp > ns.newest %}
+              {% set ns.newest = stamp %}
+            {% endif %}
+          {% endfor %}
+          {% set newest = ns.newest %}
+          {% set rank = {'GOOD': 0, 'FAIR': 1, 'POOR': 2, 'VERY POOR': 3, 'EXTREMELY POOR': 4} %}
+          {% set ns = namespace(worst=none, worst_rank=-1) %}
+          {% for obs in rows %}
+            {% if (obs.Date, obs.Hour) == newest %}
+              {% set cat_raw = obs.AirQualityCategory | default(none, true) %}
+              {% set cat_key = (cat_raw | upper | trim) if cat_raw else none %}
+              {% if cat_key and cat_key in rank and rank[cat_key] > ns.worst_rank %}
+                {% set ns.worst_rank = rank[cat_key] %}
+                {% set ns.worst = obs %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.worst %}
+            {{
+              {
+                'category': ns.worst.AirQualityCategory | title,
+                'pollutant': ns.worst.Parameter.ParameterDescription,
+                'value': ns.worst.Value,
+                'units': ns.worst.Parameter.Units
+              } | tojson
+            }}
+          {% else %}
+            no_data
+          {% endif %}
+
+template:
+  - trigger:
+      - trigger: state
+        entity_id: sensor.dash4_air_quality_raw
+    sensor:
+      - name: "Dash4 Air Quality"
+        unique_id: dash4_air_quality
+        state: >-
+          {% set raw = states('sensor.dash4_air_quality_raw') %}
+          {% if raw not in ['no_data', 'unknown', 'unavailable', ''] %}
+            {% set data = raw | from_json %}
+            available
+          {% else %}
+            no_data
+          {% endif %}
+        attributes:
+          category: >-
+            {% set raw = states('sensor.dash4_air_quality_raw') %}
+            {{ (raw | from_json).get('category') if raw not in ['no_data', 'unknown', 'unavailable', ''] else none }}
+          pollutant: >-
+            {% set raw = states('sensor.dash4_air_quality_raw') %}
+            {% set desc = (raw | from_json).get('pollutant') if raw not in ['no_data', 'unknown', 'unavailable', ''] else none %}
+            {% if desc is none %}
+              {{ none }}
+            {% else %}
+              {% if '<10' in desc %}
+                PM10
+              {% elif '<2.5' in desc %}
+                PM2.5
+              {% elif 'Ozone' in desc %}
+                Ozone
+              {% elif 'Nitrogen Dioxide' in desc %}
+                NO2
+              {% elif 'Sulfur' in desc or 'Sulphur' in desc %}
+                SO2
+              {% elif 'Carbon Monoxide' in desc %}
+                CO
+              {% else %}
+                {{ desc }}
+              {% endif %}
+            {% endif %}
+          value: >-
+            {% set raw = states('sensor.dash4_air_quality_raw') %}
+            {{ (raw | from_json).get('value') if raw not in ['no_data', 'unknown', 'unavailable', ''] else none }}
+          units: >-
+            {% set raw = states('sensor.dash4_air_quality_raw') %}
+            {{ (raw | from_json).get('units') if raw not in ['no_data', 'unknown', 'unavailable', ''] else none }}
+  - trigger:
+      - trigger: state
+        entity_id: sensor.dash4_air_quality
+    sensor:
+      - name: "Dash4 AQ Last Good Reading"
+        unique_id: dash4_aq_last_good_reading
+        # Sticky timestamp: stamps now() whenever real category data is
+        # present, otherwise holds its previous value (same self-referencing
+        # this.state pattern as the free-window baseline trackers in
+        # packages/sensors_template.yaml). Starts 'unknown' until the first
+        # ever successful reading. Used only to detect a SUSTAINED (7+ day)
+        # outage in scripts.yaml's dash4_box3_tap - a short outage still
+        # shows "API Offline" via packages/dash4_weather_card.yaml's readings
+        # entry, it doesn't need this timestamp at all.
+        state: >-
+          {% if state_attr('sensor.dash4_air_quality', 'category') is not none %}
+            {{ now().isoformat() }}
+          {% else %}
+            {{ this.state }}
+          {% endif %}

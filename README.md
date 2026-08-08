@@ -1,6 +1,6 @@
 # WeatherFlow + BOM Weather Card for Home Assistant
 
-A custom Lovelace card for Australian Home Assistant users running a **WeatherFlow (Tempest)** weather station alongside a **Bureau of Meteorology (BOM)** weather integration. Combines live station readings with BOM's 5-day forecast and hourly rain probability into one compact card, with a tap-to-expand scrollable rain graph.
+A custom Lovelace card for Australian Home Assistant users running a **WeatherFlow (Tempest)** weather station alongside a **Bureau of Meteorology (BOM)** weather integration. Combines live station readings with BOM's 5-day forecast and hourly rain probability into one compact card, with tap-to-expand scrollable temperature and rain graphs — plus an optional local air quality reading for NSW users.
 
 ![Card overview](images/card-overview.png)
 
@@ -18,31 +18,35 @@ Live temperature and humidity from your WeatherFlow station, falling back to BOM
 
 ### Box 3 — Auto-priority reading, tap to cycle manually
 
-Box 3 automatically shows whichever condition is most relevant right now, in priority order — a genuine extreme (high wind gust, extreme rain, extreme lightning, extreme UV, or a large feels-like gap) always outranks a merely-active non-extreme condition, which in turn outranks the wind/feels-like default. Extremes get a pulsing indicator. Like boxes 1/2, this recomputes reactively whenever the underlying condition changes — it isn't on a timer.
+Box 3 automatically shows whichever condition is most relevant right now, in priority order — a genuine extreme (severe air quality, high wind gust, extreme rain, extreme lightning, extreme UV, or a large feels-like gap) always outranks a merely-active non-extreme condition, which in turn outranks the wind/feels-like default. Extremes get a pulsing indicator. Like boxes 1/2, this recomputes reactively whenever the underlying condition changes — it isn't on a timer.
 
 **→ See [`docs/box3-guide.md`](docs/box3-guide.md) for the full priority flowchart, every metric's exact trigger thresholds, and how the colour/pulse rules work.**
 
-![Rain reading](images/card-box3-rain.png)
+![Air quality reading](images/card-box3-air-quality.png)
 
-**Tap Box 3** to manually cycle through readings instead: **wind → rain → lightning → UV → feels-like → wind → ...**. Wind and feels-like are always available to tap to; rain, lightning, and UV are automatically **skipped from the cycle whenever their value is currently inactive/zero** (e.g. no lightning strikes right now), so a tap never lands you on an empty "0" reading. A manual selection reverts to auto after 1 minute of inactivity, on a **double tap**, or immediately if a genuinely new condition becomes active while you're viewing a manual pin.
+**Tap Box 3** to manually cycle through readings instead: **wind → rain → lightning → UV → feels-like → air quality → wind → ...**. Wind and feels-like are always available to tap to; rain, lightning, UV, and air quality are automatically **skipped from the cycle whenever their value is currently inactive/zero/unconfigured** (e.g. no lightning strikes right now), so a tap never lands you on an empty "0" reading. A manual selection reverts to auto after 1 minute of inactivity, on a **double tap**, or immediately if a genuinely new condition becomes active while you're viewing a manual pin.
+
+**Air quality (optional, NSW only)** — pulls live observations from the free, keyless NSW air quality monitoring API for one configured site, and always shows the single worst-category pollutant currently reporting (e.g. "Ozone · Poor", "PM2.5 · Very Poor"). Leave `input_text.dash4_aq_site_id` blank and this entire feature no-ops — no errors, nothing appears on the card. **Very Poor/Extremely Poor is the highest-ranked extreme of all** (outranks even a high wind gust) and pulses red; **Poor** shows solid amber and sits below UV in priority. If the source API goes quiet for 7+ consecutive days the reading is dropped from the manual tap-cycle until it recovers, so a stuck "API Offline" reading never becomes a permanent tap stop.
 
 **Default wind reading shows live gusting, no waiting for the 60 km/h extreme threshold.** The default wind reading (shown whenever nothing higher-priority is active) reacts to your station's current gust reading: below 20 km/h it's the plain compass direction + average speed; at 20 km/h or above, the label becomes just "Gusting", the sub-text switches to the gust speed alone (no average speed shown, no "Gust" prefix — just the number), and the reading renders in amber — genuinely gusty conditions get visual acknowledgement well before they'd ever cross the 60 km/h "extreme" pulsing-red threshold. 20 km/h sits around the Beaufort Force 3→4 boundary (gentle→moderate breeze), roughly where wind starts to feel noteworthy rather than just background — adjust the threshold in the template (`gust >= 20`) to taste for your own station/climate. This is purely live — no hold/debounce timer — so it reverts to the plain reading the moment the next station update reports a lower gust, and it's still just the same lowest-priority fallback reading, so rain/lightning/UV/feels-hot/feels-cold all still take precedence over it exactly as before.
 
-### 5-day forecast + hourly rain graph
+### 5-day forecast + hourly temperature & rain graphs
 
-A 5-day forecast table sourced from BOM, with day labels derived from each forecast entity's own date (not sensitive to BOM's forecast-reissue timing). The 5-day rows' own refresh cadence follows your BOM integration's own polling settings — this card doesn't control that. The card's own hourly-rain re-fetch (`weather.get_forecasts`, used for the tappable graph below) runs on a fixed 5-minute schedule plus once at Home Assistant startup, independent of your BOM integration's general polling.
+A 5-day forecast table sourced from BOM, with day labels derived from each forecast entity's own date (not sensitive to BOM's forecast-reissue timing). The 5-day rows' own refresh cadence follows your BOM integration's own polling settings — this card doesn't control that. The card's own hourly re-fetch (`weather.get_forecasts`, used for the tappable graphs below) runs on a fixed 5-minute schedule plus once at Home Assistant startup, independent of your BOM integration's general polling.
 
-Tap on Today or Tomorrow (when rain is forecast) to expand an inline, horizontally-scrollable hourly rain graph — smoothed curve, probability/mm/time labels. The graph line draws itself on from left to right the first time you expand a day, with the area fill and per-hour labels fading in staggered behind it — a one-shot reveal, not a replay on every re-render. Both rows draw at the same visual pen speed regardless of how many hours are in the graph (Tomorrow has roughly double Today's columns late in the day, so its draw simply takes proportionally longer rather than racing through at the same fixed duration).
+Tap on Today or Tomorrow (when rain is forecast) to expand an inline, horizontally-scrollable hourly graph. **Which graph opens first depends on whether it's currently raining:** the rain probability graph if it is, the temperature graph otherwise — so the panel always leads with whichever's more relevant right now. Either way, the graph line draws itself on from left to right the first time you expand a day, with the area fill and per-hour labels/dots fading in staggered behind it — a one-shot reveal, not a replay on every re-render. Both rows draw at the same visual pen speed regardless of how many hours are in the graph (Tomorrow has roughly double Today's columns late in the day, so its draw simply takes proportionally longer rather than racing through at the same fixed duration).
+
+![Temperature graph view](images/card-temp-graph-view.png)
 
 **Today and Tomorrow's rain % is the max of that day's hourly chances, not BOM's whole-day figure.** BOM's daily probability represents "chance of any rain during the day," which is a different (and usually higher) statistic than any single hour's chance — showing it as the row's headline number could disagree with the peak you'd see after tapping to expand the graph, which reads as contradictory at a glance. Tuesday/Wednesday/Thursday still show BOM's daily figure directly, since BOM's hourly data only covers the next ~48 hours and there's no expanded graph for those rows to be inconsistent with.
 
-![Graph view](images/card-graph-view.png)
+![Rain probability graph view](images/card-graph-view.png)
 
-**Scrolling:** the graph covers the full day (24 hours for Tomorrow; Today only ever has hours from "now" onward, since forecast data is forward-looking, not historical). On first expand it auto-scrolls so the *current* hour sits centered in the visible viewport — for Today this naturally can't be a true center (there's nothing earlier than "now" to center against), so it opens at its leftmost hour instead; Tomorrow centers properly with hours visible on both sides. From there it's a free horizontal scroll/swipe, no snapping to hour boundaries. Scrolling resets a 3-minute auto-collapse timer, so actively browsing the graph never gets cut off mid-swipe — a panel left untouched for 3 minutes collapses on its own.
+**Scrolling:** each graph covers the full day (24 hours for Tomorrow; Today only ever has hours from "now" onward, since forecast data is forward-looking, not historical). On first expand it auto-scrolls so the *current* hour sits centered in the visible viewport — for Today this naturally can't be a true center (there's nothing earlier than "now" to center against), so it opens at its leftmost hour instead; Tomorrow centers properly with hours visible on both sides. From there it's a free horizontal scroll/swipe, no snapping to hour boundaries. Scrolling resets a 3-minute auto-collapse timer, so actively browsing a graph never gets cut off mid-swipe — a panel left untouched for 3 minutes collapses on its own.
 
-**Where the data genuinely ends:** if the last hour in either day's data still shows rain, the line tapers smoothly down to the baseline at that edge rather than stopping flat — Today's graph also gets a small "See Tmow for further data" note underneath, since Tomorrow's row is where the rest of the picture lives.
+**Where the rain data genuinely ends:** if the last hour in either day's data still shows rain, the line tapers smoothly down to the baseline at that edge rather than stopping flat — Today's graph also gets a small "See Tmow for further data" note underneath, since Tomorrow's row is where the rest of the picture lives.
 
-Tap the graph to switch to a raw numeric grid instead; tap that to collapse, or double-tap the graph to collapse directly. **Tapping the day row's header itself (Today/Tmow) while it's already expanded does the same thing** as tapping the content below it — no dead spot if you naturally tap the row again instead of the graph/grid.
+**Tap the graph to cycle: [whichever graph opened first] → [the other graph] → raw numeric grid.** A raw grid tap collapses the panel (its own tap target); double-tap either graph at any point to collapse directly instead of stepping through the cycle. **Tapping the day row's header itself (Today/Tmow) while it's already expanded does the same thing** as tapping the content below it — no dead spot if you naturally tap the row again instead of the graph/grid.
 
 ![Raw grid view](images/card-raw-view.png)
 
@@ -55,6 +59,8 @@ A footer strip surfaces any active BOM warnings for your configured location (`d
 **Warnings show in full, no character limit or truncation:** an active BOM warning's title text always renders in full, however long it is — no max-height, no ellipsis, no cutting the string short. A long warning title just wraps across as many lines as it needs, and the card grows to fit (same "size to actual content, not a fixed height" approach used throughout this card).
 
 **The no-warning fallback text is clamped to 2 lines, tap to expand.** Unlike an active warning, today's extended forecast can run fairly long — it's shown clamped to 2 lines by default with a **▼ chevron** on the right. Tap the box (or the chevron) to reveal the full text, which types itself in word-by-word (~2 seconds for a typical paragraph); tap again to collapse. The chevron is always shown whenever there's fallback text to expand, regardless of whether it actually needs the extra room — simpler and more predictable than trying to detect overflow, which turned out to be unreliable across browsers.
+
+![Expanded forecast text](images/card-footer-expanded.png)
 
 **Where the wording comes from, and why it can vary in specificity:** this footer shows BOM's own warning title text verbatim — the card doesn't filter, summarize, or rewrite it. Your BOM integration was set up pointing at a specific location, and BOM's own backend checks that location against *all* of its warning zone types independently (marine districts, severe weather forecast districts, fire danger areas, flood districts, heatwave zones, etc.) — each zone type is drawn with completely different boundaries for its own purpose, so a single point can simultaneously sit inside a broad marine zone, a differently-shaped severe-weather district, and so on. BOM's API returns whatever's currently active for *any* zone containing that point, and the title wording it uses is entirely up to BOM and varies by warning type: some are worded at state level ("... for New South Wales"), others name a specific forecast district by name. Which one you see at any moment depends purely on which BOM zone type happens to have something active right now — not something this card controls or can normalize, since it's just displaying whatever text BOM's API provides for your own configured location.
 
@@ -77,10 +83,12 @@ Copy these YAML files into your `config/packages/` folder:
 - `packages/dash4_weather_card.yaml` — required
 - `packages/dash4_public_config.yaml` — required
 - `packages/dash4_box3_interaction.yaml` — optional, only needed if you want Box 3's tap-to-cycle behavior (see above); the card works fine without it, Box 3 just won't respond to taps
+- `packages/dash4_air_quality.yaml` — optional, only needed if you want the Air Quality reading (NSW only, see above); leave it out and the card works fine without it, Box 3 just never shows an air quality option
 
-Edit `dash4_public_config.yaml`'s two `initial:` values before restarting:
+Edit `dash4_public_config.yaml`'s `initial:` values before restarting:
 - `dash4_weatherflow_prefix`: your WeatherFlow station's entity prefix. Find it by checking any of your station's sensors, e.g. `sensor.<this>_temperature` — the part between `sensor.` and `_temperature` is your prefix.
 - `dash4_bom_prefix`: your BOM location's entity prefix. Find it via your `weather.<this>` entity, or the `sensor.<this>_temp_max_0`-style forecast sensors your BOM integration creates.
+- `dash4_aq_site_id`: optional — only relevant if you installed `dash4_air_quality.yaml`. Leave blank to skip; otherwise find your nearest NSW monitoring site's numeric ID via a GET to `https://data.airquality.nsw.gov.au/api/Data/get_SiteDetails`.
 
 Restart Home Assistant (new `input_text`/`input_select`/`timer` helpers require a restart to appear).
 
@@ -118,9 +126,9 @@ The temperature value itself always prefers your **local WeatherFlow station** �
 - Feels **hotter**: actual 23–25°C needs ≥4°C gap; 25–30°C needs ≥3°C; 30–35°C needs ≥2°C; >35°C needs only ≥1°C.
 - Escalates to pulsing red/blue under the same ≥35°C / <10°C actual-temperature rule as Box 1 above; otherwise solid.
 
-**Box 3 — other extreme thresholds:** wind gust ≥ 60 km/h · rain intensity reported as "extreme" AND rain rate > 0 · lightning ≥ 10 strikes in the last hour · UV index ≥ 11. All pulse red when triggered. Rain (non-extreme, just currently active) shows solid teal; lightning (non-extreme, just currently active) shows solid amber — these two have no "extreme-only" variant of their base colour, they either show their accent colour or don't show at all.
+**Box 3 — other extreme thresholds:** wind gust ≥ 60 km/h · rain intensity reported as "extreme" AND rain rate > 0 · lightning ≥ 10 strikes in the last hour · UV index ≥ 11 · air quality category Very Poor/Extremely Poor. All pulse red when triggered. Rain (non-extreme, just currently active) shows solid teal; lightning (non-extreme, just currently active) shows solid amber; air quality category Poor shows solid amber — these have no separate "extreme-only" variant of their base colour, they either show their accent colour or don't show at all.
 
-**Multi-extreme border:** if 2 or more of the 6 extreme flags (feels-colder, feels-hotter, high wind, rain, lightning, UV) are true at once, Box 3's whole border pulses amber as an additional "multiple things going on" signal, on top of whichever single reading is currently selected.
+**Multi-extreme border:** if 2 or more of the 7 extreme flags (feels-colder, feels-hotter, high wind, rain, lightning, UV, air quality) are true at once, Box 3's whole border pulses amber as an additional "multiple things going on" signal, on top of whichever single reading is currently selected.
 
 ## Theming
 
@@ -128,8 +136,9 @@ The card's base layout (background, blur, text colours, dividers) follows your a
 
 ## Notes
 
-- Only Today and Tomorrow's forecast rows are ever tappable for the hourly graph — BOM's hourly forecast data reliably covers roughly the next 48 hours only.
-- The card has no config-flow UI; all configuration is via the YAML shown above and the two `input_text` helpers.
+- Only Today and Tomorrow's forecast rows are ever tappable for the hourly graphs — BOM's hourly forecast data reliably covers roughly the next 48 hours only.
+- The card has no config-flow UI; all configuration is via the YAML shown above and the `input_text` helpers.
+- The Air Quality reading is NSW-only (it queries the NSW government's open air quality API by monitoring-site ID) and entirely optional — outside NSW, or if you'd rather not use it, just skip `packages/dash4_air_quality.yaml` and leave `dash4_aq_site_id` blank.
 
 ## License
 
