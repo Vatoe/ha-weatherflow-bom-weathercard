@@ -57,7 +57,7 @@ const STYLE = `
   .masthead .byline .header-icon { margin-right: 4px; font-size: 13px; }
   .masthead .byline .tsep { margin: 0 3px; }
 
-  .arc-wrap { position: relative; height: 56px; margin: 10px 0 4px; }
+  .arc-wrap { position: relative; height: 60px; margin: 10px 0 4px; }
   .arc-wrap svg { position: absolute; top: 0; left: 0; width: 100%; height: 40px; overflow: visible; display: block; }
   .arc-fill { fill: none; stroke-width: 1.5; stroke-linecap: round; }
   .arc-dot { position: absolute; transform: translate(-50%, -50%); font-size: 13px; line-height: 1; filter: drop-shadow(0 0 4px rgba(255,196,74,0.85)); }
@@ -65,7 +65,7 @@ const STYLE = `
   /* Labels sit in the dedicated 16px strip below the fixed-height SVG (see
      .arc-wrap/.arc-wrap svg above) so they never overlap the sun/moon dot,
      which can sit as low as y=32 (of the 40px arc) right at sunrise/sunset. */
-  .arc-label { position: absolute; top: 44px; font-size: 8.5px; color: var(--secondary-text-color); letter-spacing: 0.3px; }
+  .arc-label { position: absolute; top: 48px; font-size: 8.5px; color: var(--secondary-text-color); letter-spacing: 0.3px; }
   .arc-label-start { left: 0; }
   .arc-label-end { right: 0; }
 
