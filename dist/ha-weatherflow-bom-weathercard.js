@@ -61,7 +61,7 @@ const STYLE = `
   .arc-wrap svg { width: 100%; height: 100%; overflow: visible; display: block; }
   .arc-fill { fill: none; stroke-width: 1.5; stroke-linecap: round; }
   .arc-dot { position: absolute; transform: translate(-50%, -50%); font-size: 13px; line-height: 1; filter: drop-shadow(0 0 4px rgba(255,196,74,0.85)); }
-  .arc-dot.night { filter: drop-shadow(0 0 4px rgba(138,180,255,0.8)); }
+  .arc-dot.night { filter: drop-shadow(0 0 3px rgba(180,210,255,0.95)) drop-shadow(0 0 7px rgba(138,180,255,0.65)); }
   .arc-label { position: absolute; bottom: -2px; font-size: 8.5px; color: var(--secondary-text-color); letter-spacing: 0.3px; }
   .arc-label-start { left: 0; }
   .arc-label-end { right: 0; }
