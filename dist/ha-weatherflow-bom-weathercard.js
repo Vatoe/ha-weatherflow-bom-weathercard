@@ -57,12 +57,15 @@ const STYLE = `
   .masthead .byline .header-icon { margin-right: 4px; font-size: 13px; }
   .masthead .byline .tsep { margin: 0 3px; }
 
-  .arc-wrap { position: relative; height: 40px; margin: 10px 0 4px; }
-  .arc-wrap svg { width: 100%; height: 100%; overflow: visible; display: block; }
+  .arc-wrap { position: relative; height: 56px; margin: 10px 0 4px; }
+  .arc-wrap svg { position: absolute; top: 0; left: 0; width: 100%; height: 40px; overflow: visible; display: block; }
   .arc-fill { fill: none; stroke-width: 1.5; stroke-linecap: round; }
   .arc-dot { position: absolute; transform: translate(-50%, -50%); font-size: 13px; line-height: 1; filter: drop-shadow(0 0 4px rgba(255,196,74,0.85)); }
   .arc-dot.night { filter: drop-shadow(0 0 3px rgba(180,210,255,0.95)) drop-shadow(0 0 7px rgba(138,180,255,0.65)); }
-  .arc-label { position: absolute; bottom: -2px; font-size: 8.5px; color: var(--secondary-text-color); letter-spacing: 0.3px; }
+  /* Labels sit in the dedicated 16px strip below the fixed-height SVG (see
+     .arc-wrap/.arc-wrap svg above) so they never overlap the sun/moon dot,
+     which can sit as low as y=32 (of the 40px arc) right at sunrise/sunset. */
+  .arc-label { position: absolute; top: 44px; font-size: 8.5px; color: var(--secondary-text-color); letter-spacing: 0.3px; }
   .arc-label-start { left: 0; }
   .arc-label-end { right: 0; }
 
@@ -528,7 +531,6 @@ class Dash4WeatherCard extends HTMLElement {
   // cell to actual rendered content instead of reserving a fixed-height track that can
   // never exactly match it (box3's alert-lines block is variable height: 0/1/2 lines,
   // cyclable, and the fallback forecast text can expand to its full length).
-  // See docs/reference/best-practices/lovelace-custom-cards.md.
   getGridOptions() {
     return { columns: 12 };
   }
@@ -608,7 +610,9 @@ class Dash4WeatherCard extends HTMLElement {
     const isNight = state.mode === 'night';
     const pt = pointOnQuadratic(state.frac, ARC_P0, ARC_P1, ARC_P2);
     dotEl.style.left = `${(pt.x / ARC_VIEWBOX_W) * 100}%`;
-    dotEl.style.top = `${(pt.y / ARC_VIEWBOX_H) * 100}%`;
+    // px, not %: the SVG is now a fixed 40px tall (see .arc-wrap svg CSS) inside a
+    // taller .arc-wrap, so 1 viewBox y-unit maps 1:1 to a real pixel here.
+    dotEl.style.top = `${pt.y}px`;
     dotEl.textContent = isNight ? moonPhaseEmoji(n) : '☀️';
     dotEl.classList.toggle('night', isNight);
     if (labelStartEl) labelStartEl.textContent = state.start ? formatTime(state.start) : '';
