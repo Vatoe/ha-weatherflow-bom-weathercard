@@ -12,6 +12,30 @@ The header is a small eyebrow label, a serif date headline, and a byline (condit
 
 Sunrise, sunset, and moon phase are all worked out **on your own device**, from your Home Assistant instance's configured latitude/longitude — no extra sensor, integration, or API key needed, and nothing is sent anywhere to calculate it. This also means it's correct for wherever you're running the card, not just this card's original household.
 
+### Climate drivers — tap the sun arc
+
+![Climate drivers panel](images/card-climate-drivers.png)
+
+**How to get to it:** tap the sun/moon arc in the header. The arc morphs into the Climate Drivers panel; tap the panel again to return to the arc. (The arc only responds to taps when the optional climate-drivers data package is installed — see Installation step 2. Without it nothing changes and the arc stays a plain display.)
+
+The panel shows the big, slow-moving patterns that steer your region's weather over weeks and months, rather than today's forecast:
+
+| Driver | What it is | What it means for eastern Australia |
+|---|---|---|
+| **SOI** — Southern Oscillation Index | Air-pressure difference between Tahiti and Darwin | Sustained negative = El Niño (weaker trade winds, less rain); sustained positive = La Niña (more rain) |
+| **IOD** — Indian Ocean Dipole | Sea-surface temperature difference between the western and eastern tropical Indian Ocean | Positive = less moisture toward Australia, drier; negative = extra moisture, often wetter |
+| **SAM** — Southern Annular Mode | North–south shift of the westerly winds around Antarctica | Positive pushes rain-bearing systems south; negative brings them closer to the coast |
+| **STR** — Subtropical Ridge | The belt of high pressure across southern Australia | A stronger ridge blocks fronts and rain (drier); a weaker ridge lets more through |
+| **MJO** — Madden–Julian Oscillation | An eastward-moving pulse of cloud and rain near the equator, cycling every 30–60 days | Phases 4–6 typically enhance rainfall in the east |
+
+Each row shows the driver's current state in words, a slider showing where today's reading sits on its usual range, and the numeric value. Above the rows is a one-line **ENSO outlook** (for example "El Niño continues to strengthen. 83% chance"), and below them a short plain-English summary that ties the drivers together into what they typically mean for the coming weeks.
+
+![Climate driver definitions](images/card-climate-definitions.png)
+
+Tap **"Tap to expand for climate driver definitions"** under the summary to open the definitions for each driver (as above) — the same explanations as in the table.
+
+Data comes from free public NOAA and BOM sources — no API key — and is refreshed once a day. The drivers are tuned for **eastern Australia**; elsewhere the readings are still correct but the plain-English "what it means" text won't apply to your climate.
+
 ### Box 1 / Box 2 — Temp & Humidity
 
 Live temperature and humidity from your WeatherFlow station, falling back to BOM data if the station goes offline. These update reactively, immediately reflecting whatever your WeatherFlow station's own sensors report — there's no polling interval controlled by this card, it just re-renders the instant the underlying entity changes.
@@ -92,11 +116,14 @@ Copy these YAML files into your `config/packages/` folder:
 - `packages/dash4_public_config.yaml` — required
 - `packages/dash4_box3_interaction.yaml` — optional, only needed if you want Box 3's tap-to-cycle behavior (see above); the card works fine without it, Box 3 just won't respond to taps
 - `packages/dash4_air_quality.yaml` — optional, only needed if you want the Air Quality reading (NSW only, see above); leave it out and the card works fine without it, Box 3 just never shows an air quality option
+- `packages/dash4_climate_drivers.yaml` + `scripts/climate_drivers.py` + `scripts/climate_drivers_str_backfill.py` — optional, only needed for the Climate Drivers panel (tap the sun arc). Copy the package into `config/packages/` and both scripts into `config/scripts/`. It uses free public NOAA/BOM data — no API key — and the indices are tuned for eastern Australia. Run the backfill **once** before first use from a terminal (`python3 /config/scripts/climate_drivers_str_backfill.py` — it downloads about 30 years of NOAA data to build the pressure-ridge baseline, so it takes a few minutes; skip it and the STR row is incomplete). After a restart, call `shell_command.climate_drivers_scan` once for the first reading; it then refreshes daily.
 
 Edit `dash4_public_config.yaml`'s `initial:` values before restarting:
 - `dash4_weatherflow_prefix`: your WeatherFlow station's entity prefix. Find it by checking any of your station's sensors, e.g. `sensor.<this>_temperature` — the part between `sensor.` and `_temperature` is your prefix.
 - `dash4_bom_prefix`: your BOM location's entity prefix. Find it via your `weather.<this>` entity, or the `sensor.<this>_temp_max_0`-style forecast sensors your BOM integration creates.
 - `dash4_aq_site_id`: optional — only relevant if you installed `dash4_air_quality.yaml`. Leave blank to skip; otherwise find your nearest NSW monitoring site's numeric ID via a GET to `https://data.airquality.nsw.gov.au/api/Data/get_SiteDetails`.
+
+- `dash4_solar_forecast_entity`: optional — the entity_id of a sensor carrying today's solar forecast (e.g. a Solcast "forecast today" sensor). When set and the data is present, today's hourly graphs gain a **Solar** step (tap cycle: Temperature → Solar → Rain → raw). Leave blank and the Solar graph never appears.
 
 Restart Home Assistant (new `input_text`/`input_select`/`timer` helpers require a restart to appear).
 

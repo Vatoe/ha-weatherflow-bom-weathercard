@@ -3,6 +3,8 @@
 // hands to every custom card - no WebSocket connection/auth layer needed at all
 // (unlike the old iframe version, which had to run in an isolated browsing context).
 
+const EXTRA_PANEL_LAYER_HTML = '';
+
 const ICON_MAP = {
   'sunny': '☀️', 'night': '🌙', 'cloudy': '☁️',
   'partly-cloudy': '⛅', 'pouring': '🌧️', 'rainy': '🌦️',
@@ -51,23 +53,83 @@ const STYLE = `
   .masthead-fallback { text-align: center; padding: 12px 2px; font-size: 14px; font-family: 'Helvetica Neue', Arial, sans-serif; color: var(--secondary-text-color); }
 
   .masthead { padding: 0 2px 5px; font-family: 'Helvetica Neue', Arial, sans-serif; }
-  .masthead .eyebrow { text-align: center; font-size: 9.5px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #66D4CF; margin-bottom: 6px; }
+  .masthead .eyebrow { text-align: center; font-size: 9.5px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #e3bd86; margin-bottom: 6px; }
   .masthead .headline { text-align: center; font-family: Georgia, 'Times New Roman', serif; font-size: 21px; font-weight: 700; letter-spacing: 0.3px; color: var(--primary-text-color); margin-bottom: 4px; }
   .masthead .byline { text-align: center; font-size: 12px; font-weight: 400; color: var(--secondary-text-color); letter-spacing: 0.5px; }
   .masthead .byline .header-icon { margin-right: 4px; font-size: 13px; }
   .masthead .byline .tsep { margin: 0 3px; }
 
-  .arc-wrap { position: relative; height: 60px; margin: 10px 0 4px; }
-  .arc-wrap svg { position: absolute; top: 0; left: 0; width: 100%; height: 40px; overflow: visible; display: block; }
+  .arc-wrap { position: relative; height: 60px; margin: 10px 0 4px; transition: height 480ms cubic-bezier(.4,0,.2,1); }
+  .arc-wrap.climate-open { height: 300px; }
+  .arc-layer { position: absolute; inset: 0; transition: opacity 260ms ease; pointer-events: none; }
+  .arc-wrap.climate-open .arc-layer, .arc-wrap.closing .arc-layer { opacity: 0; }
+  .arc-layer svg { position: absolute; top: 0; left: 0; width: 100%; height: 40px; overflow: visible; display: block; }
   .arc-fill { fill: none; stroke-width: 1.5; stroke-linecap: round; }
-  .arc-dot { position: absolute; transform: translate(-50%, -50%); font-size: 13px; line-height: 1; filter: drop-shadow(0 0 4px rgba(255,196,74,0.85)); }
+  .arc-wrap.redraw .arc-fill { stroke-dasharray: 480; stroke-dashoffset: 480; animation: drawArc 2400ms linear forwards; }
+  @keyframes drawArc { to { stroke-dashoffset: 0; } }
+  .arc-dot { position: absolute; transform: translate(-50%,-50%); font-size: 13px; line-height: 1; filter: drop-shadow(0 0 4px rgba(255,196,74,0.85)); opacity: 1; }
+  .arc-wrap.climate-open .arc-dot { opacity: 0; }
   .arc-dot.night { filter: drop-shadow(0 0 3px rgba(180,210,255,0.95)) drop-shadow(0 0 7px rgba(138,180,255,0.65)); }
-  /* Labels sit in the dedicated 16px strip below the fixed-height SVG (see
-     .arc-wrap/.arc-wrap svg above) so they never overlap the sun/moon dot,
-     which can sit as low as y=32 (of the 40px arc) right at sunrise/sunset. */
+  .arc-wrap.redraw .arc-dot { opacity: 0; animation: dotFadeIn 0ms ease 2400ms forwards; }
+  @keyframes dotFadeIn { from { opacity: 0; transform: translate(-50%,-50%) scale(0.4); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
   .arc-label { position: absolute; top: 48px; font-size: 8.5px; color: var(--secondary-text-color); letter-spacing: 0.3px; }
   .arc-label-start { left: 0; }
   .arc-label-end { right: 0; }
+  .tap-hint { position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%); font-size: 8.5px; letter-spacing: 0.5px; color: var(--secondary-text-color); white-space: nowrap; transition: opacity 300ms ease; }
+  .tap-hint.hidden { display: none; }
+  .arc-wrap.climate-open .tap-hint { opacity: 0; }
+
+  /* Climate drivers panel — morphs in place over the arc */
+  .climate-layer { position: absolute; inset: 0; height: 100%; opacity: 0; pointer-events: none; transition: opacity 300ms ease; overflow-y: auto; }
+  .arc-wrap.climate-open .climate-layer { opacity: 1; pointer-events: auto; }
+  .drv-row { display: grid; grid-template-columns: 48px 1fr 90px 80px; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.08)); opacity: 0; transform: translateX(-8px); }
+  .drv-row:last-child { border-bottom: none; }
+  .arc-wrap.climate-open .drv-row { animation: rowIn 320ms ease forwards; }
+  .arc-wrap.climate-open .drv-row.r1 { animation-delay: 60ms; }
+  .arc-wrap.climate-open .drv-row.r2 { animation-delay: 150ms; }
+  .arc-wrap.climate-open .drv-row.r3 { animation-delay: 240ms; }
+  .arc-wrap.climate-open .drv-row.r4 { animation-delay: 330ms; }
+  .arc-wrap.climate-open .drv-row.r5 { animation-delay: 420ms; }
+  @keyframes rowIn { to { opacity: 1; transform: translateX(0); } }
+  .drv-icon { font-size: 20px; text-align: center; }
+  .drv-name { font-size: 13px; font-weight: 600; color: var(--primary-text-color); }
+  .drv-phase { font-size: 11px; color: rgba(255,255,255,0.78); margin-top: 1px; }
+  .gauge-track { position: relative; height: 6px; background: var(--divider-color, rgba(255,255,255,0.08)); border-radius: 3px; overflow: visible; transform-origin: left; transform: scaleX(0); opacity: 0.001; }
+  .arc-wrap.climate-open .drv-row.r1 .gauge-track { animation: trackDraw 360ms ease forwards; animation-delay: 190ms; }
+  .arc-wrap.climate-open .drv-row.r2 .gauge-track { animation: trackDraw 360ms ease forwards; animation-delay: 280ms; }
+  .arc-wrap.climate-open .drv-row.r3 .gauge-track { animation: trackDraw 360ms ease forwards; animation-delay: 370ms; }
+  .arc-wrap.climate-open .drv-row.r4 .gauge-track { animation: trackDraw 360ms ease forwards; animation-delay: 460ms; }
+  @keyframes trackDraw { from { transform: scaleX(0); opacity: 0.001; } to { transform: scaleX(1); opacity: 1; } }
+  .gauge-needle { position: absolute; top: -3px; width: 12px; height: 12px; background: var(--primary-text-color); border-radius: 50%; transform: translateX(-50%) scale(0.4); opacity: 0; box-shadow: 0 0 6px rgba(0,0,0,0.3); }
+  .arc-wrap.climate-open .drv-row.r1 .gauge-needle { animation: needlePop 260ms ease forwards; animation-delay: 560ms; }
+  .arc-wrap.climate-open .drv-row.r2 .gauge-needle { animation: needlePop 260ms ease forwards; animation-delay: 650ms; }
+  .arc-wrap.climate-open .drv-row.r3 .gauge-needle { animation: needlePop 260ms ease forwards; animation-delay: 740ms; }
+  .arc-wrap.climate-open .drv-row.r4 .gauge-needle { animation: needlePop 260ms ease forwards; animation-delay: 830ms; }
+  @keyframes needlePop { from { transform: translateX(-50%) scale(0.4); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+  .drv-value { font-size: 11px; color: rgba(255,255,255,0.78); text-align: right; }
+  .mjo-wheel { position: relative; width: 36px; height: 36px; border: 2px solid var(--divider-color, rgba(255,255,255,0.2)); border-radius: 50%; margin: 0 auto; opacity: 0; transform: scale(0.5); }
+  .arc-wrap.climate-open .drv-row.r5 .mjo-wheel { animation: wheelPop 320ms ease forwards; animation-delay: 550ms; }
+  @keyframes wheelPop { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+  .mjo-phase-dot { position: absolute; width: 8px; height: 8px; background: #66D4CF; border-radius: 50%; transform: translate(-50%, -50%); }
+  .drv-summary { font-size: 12px; line-height: 1.5; color: var(--primary-text-color); opacity: 0; transform: translateY(4px); padding: 7px 0 2px; border-top: 1px solid var(--divider-color, rgba(255,255,255,0.08)); margin-top: 2px; text-align: justify; }
+  .arc-wrap.climate-open .drv-summary { animation: summaryIn 340ms ease forwards; animation-delay: 900ms; }
+  @keyframes summaryIn { to { opacity: 1; transform: translateY(0); } }
+  .drv-headline { font-size: 13.5px; font-weight: 700; color: #2dd4bf; padding: 4px 2px 0; line-height: 1.3; text-align: center; opacity: 0; transform: translateY(4px); }
+  .arc-wrap.climate-open .drv-headline { animation: summaryIn 340ms ease forwards; animation-delay: 900ms; }
+  .drv-explanation { font-size: 10.5px; line-height: 1.45; color: rgba(255,255,255,0.5); padding: 6px 0 0; border-top: 1px solid var(--divider-color, rgba(255,255,255,0.06)); margin-top: 6px; font-style: italic; opacity: 0; transform: translateY(4px); }
+  .arc-wrap.climate-open .drv-explanation { animation: summaryIn 340ms ease forwards; animation-delay: 1000ms; }
+  .drv-defs-toggle { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 10.5px; color: rgba(255,255,255,0.4); padding: 8px 0 2px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; opacity: 0; transform: translateY(4px); }
+  .arc-wrap.climate-open .drv-defs-toggle { animation: summaryIn 340ms ease forwards; animation-delay: 1050ms; }
+  .drv-defs-toggle:active { opacity: 0.7; }
+  .drv-defs-chevron { font-size: 9px; transition: transform 200ms ease; }
+  .drv-defs-toggle.open .drv-defs-chevron { transform: rotate(90deg); color: #2dd4bf; }
+  .drv-defs-body { max-height: 0; overflow: hidden; transition: max-height 280ms ease, opacity 200ms ease; opacity: 0; }
+  .drv-defs-body.open { max-height: 400px; opacity: 1; padding-bottom: 10px; }
+  .drv-defs-body .drv-def-item { padding: 5px 0; border-top: 1px solid var(--divider-color, rgba(255,255,255,0.06)); }
+  .drv-defs-body .drv-def-name { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.65); text-transform: uppercase; letter-spacing: 0.3px; }
+  .drv-defs-body .drv-def-text { font-size: 10.5px; line-height: 1.45; color: rgba(255,255,255,0.45); font-style: italic; margin-top: 1px; }
+  .drv-unavailable .drv-phase, .drv-unavailable .drv-value { opacity: 0.35; }
+
 
   .box-row { display: grid; grid-template-columns: 1fr 1fr 1fr; margin-bottom: 8px; }
   .box { position: relative; padding: 8px 12px; text-align: center; }
@@ -84,6 +146,8 @@ const STYLE = `
   .box .label { font-size: 11.5px; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
   .box .value { font-size: 26px; font-weight: 700; line-height: 1.05; color: var(--primary-text-color); }
   .box .sub { font-size: 12.5px; color: var(--secondary-text-color); margin-top: 2px; font-weight: 500; }
+  /* Air Quality's "PM10 · Good" sub-line: smaller + no wrap so it fits on narrow devices */
+  .box3.air-quality .sub { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .box:not(.box3) .value { font-size: 30px; margin-top: 3px; white-space: nowrap; }
   .box3.compact .value { font-size: 30px; margin-top: 3px; white-space: nowrap; }
 
@@ -122,11 +186,11 @@ const STYLE = `
   table.forecast td.icon { width: 8%; font-size: 21px; text-align: center; }
   table.forecast td.temp { width: 20%; color: var(--secondary-text-color); white-space: nowrap; }
   table.forecast td.temp b { color: var(--primary-text-color); font-weight: 600; }
-  table.forecast td.rain { width: 14%; color: #66D4CF; }
+  table.forecast td.rain { width: 14%; color: #2dd4bf; }
   table.forecast td.desc { color: var(--secondary-text-color); }
   table.forecast td.desc .desc-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-  .alert-lines { background: var(--secondary-background-color, rgba(255,255,255,0.07)); border: 1px solid var(--divider-color, rgba(255,255,255,0.10)); border-radius: 10px; padding: 5px 12px; border-left: 3px solid #66D4CF; }
+  .alert-lines { background: var(--secondary-background-color, rgba(255,255,255,0.07)); border: 1px solid var(--divider-color, rgba(255,255,255,0.10)); border-radius: 10px; padding: 5px 12px; border-left: 3px solid transparent; }
   .alert-lines.warning { border-left-color: #FF453A; }
   .alert-lines .l1-row { display: flex; align-items: center; gap: 6px; }
   .alert-lines .l1 { font-size: 13.5px; font-weight: 400; color: var(--primary-text-color); flex: 1; min-width: 0; }
@@ -193,6 +257,9 @@ const STYLE = `
   .temp-graph-line { stroke: #FF8C00; stroke-width: 2; fill: none; }
   .temp-graph-area { fill: rgba(255, 140, 0, 0.15); }
   .temp-graph-label { fill: #FF8C00; font-size: 10px; }
+  .solar-graph-line { stroke: #ffce6b; stroke-width: 2; fill: none; }
+  .solar-graph-area { fill: rgba(255, 206, 107, 0.15); }
+  .solar-graph-label { fill: #ffce6b; font-size: 10px; }
   .graph-type-indicator {
     font-size: 10px;
     color: var(--secondary-text-color);
@@ -278,9 +345,13 @@ function moonPhaseEmoji(date) {
 // ---- Day/night arc state ----
 // Decides whether "now" falls in today's daylight window or the current
 // night window, and returns the span + elapsed fraction the arc needs.
-// Handles all three cases: daytime; evening after today's sunset (night span
-// = today's sunset -> tomorrow's sunrise); and the pre-dawn hours before
-// today's sunrise (night span = yesterday's sunset -> today's sunrise).
+function raf2(fn) { requestAnimationFrame(() => requestAnimationFrame(fn)); }
+
+// Computes the arc's current day/night state for the given instant: which side
+// of the sunrise/sunset span we're on, the span endpoints, and the elapsed
+// fraction. Handles all three cases: daytime; evening after today's sunset
+// (night span = today's sunset -> tomorrow's sunrise); and the pre-dawn hours
+// before today's sunrise (night span = yesterday's sunset -> today's sunrise).
 function computeArcState(now, lat, lon) {
   const today = sunTimes(now, lat, lon);
   if (today.sunrise && today.sunset && now >= today.sunrise && now < today.sunset) {
@@ -335,6 +406,7 @@ function formatTime(d) {
   return `${h}:${m} ${ampm}`;
 }
 
+
 // Fixed per-hour column width for the hourly rain graph (and its aligned
 // mm/time label rows beneath it) - shared by the renderer and the initial
 // scroll-centering math so they never drift out of sync with each other.
@@ -344,6 +416,13 @@ const GRAPH_COL_WIDTH = 44;
 // so the two views are immediately distinguishable at a glance.
 const TEMP_COLOR = '#FF8C00';  // Dark orange for temperature line
 const TEMP_COLOR_FILL = 'rgba(255, 140, 0, 0.15)';  // Orange fill
+
+// Solar forecast graph colour — reuses the card's own arc-gradient gold
+// (see the <stop class="arc-stop-b"> gold stop in _render()'s SVG header)
+// so the Today-only solar line reads as part of the same visual language
+// rather than an arbitrary new colour.
+const SOLAR_COLOR = '#ffce6b';  // Gold, matches arc-stop-b
+const SOLAR_COLOR_FILL = 'rgba(255, 206, 107, 0.15)';  // Gold fill, same opacity as temp/rain
 
 // Hourly forecast entries use labels like '6am' / '2pm' / '12am' - convert to
 // a 0-23 hour number so we can locate "now" (or a given hour) as a column index.
@@ -465,8 +544,8 @@ class Dash4WeatherCard extends HTMLElement {
     // opened" flag so the draw-on animation plays only on the render where a
     // row first expands (mirrors weather-station-card's _prevExpandedIdx).
     this._prevExpandedDay = null;
-    // View mode ('temp_graph'|'rain_graph'|'raw') for whichever day is
-    // currently expanded - only one day is ever expanded at a time, so a
+    // View mode ('temp_graph'|'solar_graph'|'rain_graph'|'raw') for whichever
+    // day is currently expanded - only one day is ever expanded at a time, so a
     // single field is sufficient. Always reset to 'temp_graph' on every
     // collapsed->expanded transition (overridden by _getInitialViewMode).
     this._viewMode = 'temp_graph';
@@ -496,6 +575,13 @@ class Dash4WeatherCard extends HTMLElement {
     this._descExpanded = false;
     this._descTimer = null;
     this._descAnimUntil = 0;
+    // Arc panel state — `null` (arc closed) | `'climate'`. Must live
+    // on `this`, not just the DOM, since _render() fully rebuilds
+    // shadowRoot.innerHTML on every hass-triggered re-render (same reasoning as
+    // _descExpanded above). Tapping the arc toggles the climate panel.
+    this._panelMode = null;
+    // Pending single-vs-double-tap disambiguation timer on the arc.
+    this._arcTapTimer = null;
   }
 
   setConfig(config) {
@@ -517,15 +603,17 @@ class Dash4WeatherCard extends HTMLElement {
     // entity - only re-render when something we actually display has changed.
     const entity = hass.states[this._entityId];
     const uvEntity = hass.states[this._uvEntityId];
-    const key = `${entity ? entity.last_updated : ''}|${uvEntity ? uvEntity.state : ''}`;
+    const climateSensor = hass.states['sensor.climate_drivers_card'];
+    const key = `${entity ? entity.last_updated : ''}|${uvEntity ? uvEntity.state : ''}|${climateSensor ? climateSensor.last_changed : ''}`;
     if (key === this._lastKey) return;
     this._lastKey = key;
-    if (this._connected) this._render();
-  }
-
-  // Shown in the Lovelace card picker ("Add card" dialog) as the starting config.
-  static getStubConfig() {
-    return { entity: 'sensor.dash4_weather_card', place_name: 'MY HOME' };
+    if (this._connected && !this._renderPending) {
+      this._renderPending = true;
+      requestAnimationFrame(() => {
+        this._renderPending = false;
+        this._render();
+      });
+    }
   }
 
   getCardSize() {
@@ -561,6 +649,10 @@ class Dash4WeatherCard extends HTMLElement {
       clearTimeout(this._graphTapTimer);
       this._graphTapTimer = null;
     }
+    if (this._arcTapTimer) {
+      clearTimeout(this._arcTapTimer);
+      this._arcTapTimer = null;
+    }
     // If the element is ever removed from the DOM while a row is expanded
     // (e.g. Lovelace re-rendering the view), collapse the state outright
     // rather than leaving it "expanded" with no running auto-collapse timer -
@@ -574,6 +666,45 @@ class Dash4WeatherCard extends HTMLElement {
       this._descTimer = null;
     }
     this._descAnimUntil = 0;
+  }
+
+  // Arc gradient colour — climate-driver tint only while the panel is open,
+  // otherwise the classic day/night scheme. Called from _render() and from the
+  // arc tap handler so the colour switches immediately on open/close.
+  _applyArcColor() {
+    const stopA = this.shadowRoot.querySelector('.arc-stop-a');
+    const stopB = this.shadowRoot.querySelector('.arc-stop-b');
+    const stopC = this.shadowRoot.querySelector('.arc-stop-c');
+    if (!stopA || !stopB || !stopC) return;
+    const climateSensor = this._hass && this._hass.states['sensor.climate_drivers_card'];
+    if (this._panelMode === 'climate' && climateSensor) {
+      const drv = climateSensor.attributes.drivers || {};
+      const soiPhase = (drv.soi && drv.soi.available) ? (drv.soi.phase || '').toLowerCase() : '';
+      const iodPhase = (drv.iod && drv.iod.available) ? (drv.iod.phase || '').toLowerCase() : '';
+      let arcColors = ['#8ab4ff', '#ffce6b', '#8ab4ff']; // default blue/yellow
+      if (soiPhase.includes('la niña') || soiPhase.includes('la nina')) {
+        arcColors = ['#4a90d9', '#6fa8ff', '#4a90d9']; // cool blue — La Niña
+      } else if (soiPhase.includes('el niño') || soiPhase.includes('el nino')) {
+        arcColors = ['#d94a4a', '#ff6f6f', '#d94a4a']; // warm red — El Niño
+      } else if (iodPhase.includes('positive')) {
+        arcColors = ['#d98a4a', '#ff9d5c', '#d98a4a']; // amber — positive IOD
+      } else if (iodPhase.includes('negative')) {
+        arcColors = ['#4a90d9', '#6fa8ff', '#4a90d9']; // blue — negative IOD
+      }
+      stopA.setAttribute('stop-color', arcColors[0]);
+      stopB.setAttribute('stop-color', arcColors[1]);
+      stopC.setAttribute('stop-color', arcColors[2]);
+    } else {
+      const lat = this._hass && this._hass.config && this._hass.config.latitude;
+      const lon = this._hass && this._hass.config && this._hass.config.longitude;
+      if (lat == null || lon == null) return;
+      const state = computeArcState(new Date(), lat, lon);
+      const isNight = state.mode === 'night';
+      const colors = isNight ? ['#3a4a7a', '#8ab4ff', '#3a4a7a'] : ['#8ab4ff', '#ffce6b', '#8ab4ff'];
+      stopA.setAttribute('stop-color', colors[0]);
+      stopB.setAttribute('stop-color', colors[1]);
+      stopC.setAttribute('stop-color', colors[2]);
+    }
   }
 
   _renderTitleOnly() {
@@ -622,7 +753,7 @@ class Dash4WeatherCard extends HTMLElement {
     dotEl.classList.toggle('night', isNight);
     if (labelStartEl) labelStartEl.textContent = state.start ? formatTime(state.start) : '';
     if (labelEndEl) labelEndEl.textContent = state.end ? formatTime(state.end) : '';
-    if (stopA && stopB && stopC) {
+    if (stopA && stopB && stopC && !this._panelMode) {
       const colors = isNight ? ['#3a4a7a', '#8ab4ff', '#3a4a7a'] : ['#8ab4ff', '#ffce6b', '#8ab4ff'];
       stopA.setAttribute('stop-color', colors[0]);
       stopB.setAttribute('stop-color', colors[1]);
@@ -752,6 +883,10 @@ class Dash4WeatherCard extends HTMLElement {
     if (uvExtreme) box3Classes += ' uv-extreme';
     if (d.compact) box3Classes += ' compact';
     if ((parseInt(a.extreme_count, 10) || 0) >= 2) box3Classes += ' multi-extreme';
+    // Air Quality's "pollutant · category" sub-line is the longest third-line
+    // text in Box 3 — give it its own smaller treatment so it never wraps on
+    // narrow devices (2026-08-14).
+    if (a.box3_effective_mode === 'air_quality') box3Classes += ' air-quality';
 
     const box1Class = 'box box1 tappable' + (a.box1_border && a.box1_border !== 'neutral' ? ' ' + a.box1_border : '');
 
@@ -762,15 +897,21 @@ class Dash4WeatherCard extends HTMLElement {
     const forecastRows = a.forecast_rows || [];
     const hourlyToday = a.hourly_rain_today || [];
     const hourlyTomorrow = a.hourly_rain_tomorrow || [];
-    const dayKeyFor = (day) => day === 'Today' ? 'today' : day === 'Tmow' ? 'tomorrow' : null;
-    const hourlyDataFor = (key) => key === 'today' ? hourlyToday : key === 'tomorrow' ? hourlyTomorrow : [];
+    const hourlyDayAfter = a.hourly_rain_day_after_tomorrow || [];
+    // Row expand-key resolution: the template's forecast_rows carries a stable,
+    // date-offset-derived `key` ('today' | 'tomorrow' | 'day_after' | 'none').
+    // We key off that (never the displayed weekday label, which shifts daily) so
+    // the "3rd row" expands regardless of what weekday it is. See
+    // packages/dash4_weather_card.yaml forecast_rows.
+    const dayKeyFor = (row) => (row.key && row.key !== 'none') ? row.key : null;
+    const hourlyDataFor = (key) => key === 'today' ? hourlyToday : key === 'tomorrow' ? hourlyTomorrow : key === 'day_after' ? hourlyDayAfter : [];
     // True only on the render where a row JUST expanded — the draw animation
     // must play on the first graph displayed (which respects the rain-aware
     // initial-view priority via _getInitialViewMode), never on subsequent
     // view cycles or periodic rebuilds.
     const justOpened = this._expandedDay !== null && this._prevExpandedDay !== this._expandedDay;
     const rows = forecastRows.map(row => {
-      const dayKey = dayKeyFor(row.day);
+      const dayKey = dayKeyFor(row);
       const isTappable = !!row.tappable && dayKey !== null;
       const isExpanded = isTappable && this._expandedDay === dayKey;
       const mainRow = `
@@ -789,10 +930,12 @@ class Dash4WeatherCard extends HTMLElement {
         content = this._renderRawGrid(hourlyData);
       } else if (viewMode === 'temp_graph') {
         content = this._renderTempGraph(dayKey, hourlyData, justOpened);
+      } else if (viewMode === 'solar_graph') {
+        content = this._renderSolarGraph(dayKey, hourlyData, justOpened);
       } else {
         content = this._renderHourlyGraph(dayKey, hourlyData, justOpened);
       }
-      const graphLabel = viewMode === 'temp_graph' ? 'Temperature' : (viewMode === 'rain_graph' ? 'Rain Probability' : '');
+      const graphLabel = viewMode === 'temp_graph' ? 'Temperature' : (viewMode === 'rain_graph' ? 'Rain Probability' : (viewMode === 'solar_graph' ? 'Solar Forecast' : ''));
       const detailRow = `
       <tr class="hourly-detail-row">
         <td colspan="5">
@@ -830,20 +973,25 @@ class Dash4WeatherCard extends HTMLElement {
             <span class="byline-condition"></span>
           </div>
         </div>
-        <div class="arc-wrap">
-          <svg viewBox="0 0 380 40" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="dash4ArcGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop class="arc-stop-a" offset="0%" stop-color="#8ab4ff"/>
-                <stop class="arc-stop-b" offset="50%" stop-color="#ffce6b"/>
-                <stop class="arc-stop-c" offset="100%" stop-color="#8ab4ff"/>
-              </linearGradient>
-            </defs>
-            <path class="arc-fill" stroke="url(#dash4ArcGrad)" d="M 20 32 Q 190 -4 360 32"/>
-          </svg>
-          <div class="arc-dot"></div>
-          <div class="arc-label arc-label-start"></div>
-          <div class="arc-label arc-label-end"></div>
+        <div class="arc-wrap${this._arcPanelClass()}">
+          <div class="arc-layer">
+            <svg viewBox="0 0 380 40" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="dash4ArcGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop class="arc-stop-a" offset="0%" stop-color="#8ab4ff"/>
+                  <stop class="arc-stop-b" offset="50%" stop-color="#ffce6b"/>
+                  <stop class="arc-stop-c" offset="100%" stop-color="#8ab4ff"/>
+                </linearGradient>
+              </defs>
+              <path class="arc-fill" stroke="url(#dash4ArcGrad)" d="M 20 32 Q 190 -4 360 32"/>
+            </svg>
+            <div class="arc-dot"></div>
+            <div class="arc-label arc-label-start"></div>
+            <div class="arc-label arc-label-end"></div>
+          </div>
+          <div class="climate-layer"></div>
+          ${EXTRA_PANEL_LAYER_HTML}
+          <div class="tap-hint hidden"></div>
         </div>
 
         <div class="box-row">
@@ -906,19 +1054,132 @@ class Dash4WeatherCard extends HTMLElement {
     const cardState = this._hass.states[this._entityId];
     const tempEntityId = cardState?.attributes?.temp_entity_id;
     const box1El = this.shadowRoot.querySelector('.box1');
-    if (box1El && tempEntityId) box1El.addEventListener('click', () => this._openMoreInfo(tempEntityId));
+    if (box1El && tempEntityId) box1El.addEventListener('click', () => this._openMoreInfo(tempEntityId, box1El));
 
     const humidityEntityId = cardState?.attributes?.humidity_entity_id;
     const box2El = this.shadowRoot.querySelector('.box2');
-    if (box2El && humidityEntityId) box2El.addEventListener('click', () => this._openMoreInfo(humidityEntityId));
+    if (box2El && humidityEntityId) box2El.addEventListener('click', () => this._openMoreInfo(humidityEntityId, box2El));
 
     this.shadowRoot.querySelectorAll('.tappable-row').forEach(el => {
       el.addEventListener('click', () => this._handleForecastRowClick(el.dataset.dayKey));
     });
 
+    // Climate drivers panel — total no-op when sensor doesn't exist (HACS-safe)
+    if (this._hass.states['sensor.climate_drivers_card']) {
+      const attrs = this._hass.states['sensor.climate_drivers_card'].attributes;
+      const clEl = this.shadowRoot.querySelector('.climate-layer');
+      // Declared here (not inside the block below) because the arc-color-logic
+      // block further down also reads drv, and referencing a block-scoped
+      // const outside its block throws a ReferenceError on every render —
+      // which aborted _render() before it ever reached the tap-handler
+      // addEventListener call below, so the click never did anything.
+      const drv = attrs.drivers || {};
+      if (clEl && attrs) {
+        const outlook = attrs.outlook || {};
+        // Per-driver gauge gradient colors (spec §3.4)
+        const GAUGE_COLORS = {
+          soi: { neg: '#6fa8ff', mid: '#8a8f98', pos: '#ff6f6f' },
+          iod: { neg: '#6fa8ff', mid: '#8a8f98', pos: '#ff9d5c' },
+          sam: { neg: '#c98bff', mid: '#8a8f98', pos: '#7fe0a6' },
+          str: { neg: '#6fa8ff', mid: '#8a8f98', pos: '#e0a84a' },
+        };
+        const rowHtml = (key, icon, data, isMjo, idx) => {
+          const rowCls = `drv-row r${idx}`;
+          if (!data || !data.available) {
+            return `<div class="drv-row drv-unavailable r${idx}">
+              <div class="drv-icon">${icon}</div>
+              <div><div class="drv-name">${escapeHtml(key.toUpperCase())}</div><div class="drv-phase">—</div></div>
+              <div class="gauge-track"></div>
+              <div class="drv-value">—</div>
+            </div>`;
+          }
+          if (isMjo) {
+            return `<div class="${rowCls}">
+              <div class="drv-icon">${icon}</div>
+              <div><div class="drv-name">MJO</div><div class="drv-phase">${escapeHtml(data.phase_label || '—')}</div></div>
+              <div class="drv-value" style="grid-column:3/5;text-align:left">${escapeHtml(data.amplitude_label || '—')}</div>
+            </div>`;
+          }
+          const gc = GAUGE_COLORS[key] || GAUGE_COLORS.soi;
+          const trackBg = `linear-gradient(to right, ${gc.neg} 0%, ${gc.mid} 50%, ${gc.pos} 100%)`;
+          return `<div class="${rowCls}">
+            <div class="drv-icon">${icon}</div>
+            <div><div class="drv-name">${escapeHtml(key.toUpperCase())}</div><div class="drv-phase">${escapeHtml(data.phase || '—')}</div></div>
+            <div class="gauge-track" style="background:${trackBg}"><div class="gauge-needle" style="left:${data.gauge_pct || 0}%"></div></div>
+            <div class="drv-value">${escapeHtml(data.value_label || '—')}</div>
+          </div>`;
+        };
+        clEl.innerHTML =
+          // Teal subheading — outlook verdict, only when it names an ENSO phase.
+          // No em-dash/tilde separator: period + space keeps the chance clause
+          // flowing naturally on the same line as the headline.
+          (outlook.headline && /el ni|la ni/i.test(outlook.headline)
+            ? `<div class="drv-headline">${escapeHtml(outlook.headline)}${outlook.pct_available ? `. ${outlook.pct}% chance` : ''}</div>`
+            : '') +
+          // Driver rows (on top, directly under the verdict)
+          [
+            rowHtml('soi', '🌊', drv.soi, false, 1),
+            rowHtml('iod', '🌊', drv.iod, false, 2),
+            rowHtml('sam', '🌊', drv.sam, false, 3),
+            rowHtml('str', '🌊', drv.str, false, 4),
+            rowHtml('mjo', '🌀', drv.mjo, true, 5),
+          ].join('') +
+          // Stitched summary + outlook evidence as ONE flowing paragraph at the
+          // bottom — the outlook text continues right after the summary's final
+          // sentence with no gap (previously a separate div introduced a break).
+          ([attrs.summary_text, outlook.text].filter(Boolean).join(' ')
+            ? `<div class="drv-summary">${escapeHtml([attrs.summary_text, outlook.text].filter(Boolean).join(' '))}</div>`
+            : '') +
+          // Collapsible climate driver definitions — tap to expand.
+          (() => {
+            const defs = ['soi','iod','sam','str','mjo']
+              .filter(k => drv[k] && drv[k].explanation)
+              .map(k => `<div class="drv-def-item"><div class="drv-def-name">${escapeHtml(k.toUpperCase())}</div><div class="drv-def-text">${escapeHtml(drv[k].explanation)}</div></div>`);
+            if (!defs.length) return '';
+            return `<div class="drv-defs-toggle" data-action="toggle-defs">Tap to expand for climate driver definitions <span class="drv-defs-chevron">▸</span></div><div class="drv-defs-body">${defs.join('')}</div>`;
+          })();
+          // Delegate toggle-defs click inside climate panel.
+          if (!clEl._defsHandler) {
+            clEl._defsHandler = true;
+            clEl.addEventListener('click', (e) => {
+              const tog = e.target.closest('[data-action="toggle-defs"]');
+              if (!tog) return;
+              e.stopPropagation();
+              const body = tog.nextElementSibling;
+              if (!body) return;
+              tog.classList.toggle('open');
+              body.classList.toggle('open');
+              tog.querySelector('.drv-defs-chevron').textContent = body.classList.contains('open') ? '▾' : '▸';
+              if (body.classList.contains('open')) {
+                setTimeout(() => body.scrollIntoView({ block: 'nearest' }), 50);
+              }
+            });
+          }
+      }
+    }
+
+
+    // Arc colour + tap handling for the climate panel,
+    // attached only when the climate sensor exists (HACS public-dist
+    // safe: no sensor -> arc stays non-interactive, as before this feature).
+    if (this._hass.states['sensor.climate_drivers_card']) {
+      this._applyArcColor();
+      this._updateTapHint();
+      const arcWrap = this.shadowRoot.querySelector('.arc-wrap');
+      if (arcWrap && !arcWrap._arcHandler) {
+        arcWrap._arcHandler = true;
+        arcWrap.style.cursor = 'pointer';
+        arcWrap.addEventListener('click', () => this._handleArcTap());
+      }
+    }
+
     if (this._expandedDay) {
       const viewMode = this._viewMode || 'temp_graph';
-      if (viewMode === 'temp_graph' || viewMode === 'rain_graph') {
+      // Graph-view modes get the tap-to-cycle swipe guard + scroll
+      // persistence; solar_graph is included so its graph is tappable like
+      // temp/rain (found live 2026-08-24: solar rendered fine but the graph
+      // area was tap-dead since no handler was bound for it).
+      if (viewMode === 'temp_graph' || viewMode === 'rain_graph' || viewMode === 'solar_graph') {
         const scrollEl = this.shadowRoot.querySelector('.hourly-graph-scroll');
         if (scrollEl) {
           attachTapSwipeGuard(scrollEl, (e) => {
@@ -1195,6 +1456,95 @@ class Dash4WeatherCard extends HTMLElement {
       ${moreDataNote}`;
   }
 
+  // Scrollable SVG line/area chart of Solcast solar forecast (kW) across
+  // Today only, auto-scaled to the day's min/max with padding. Gold palette
+  // to distinguish from both the orange temperature graph and the teal rain
+  // graph. Structurally identical to _renderTempGraph (same Catmull-Rom
+  // chart, same edge-extension logic) — reads h.kw instead of h.temp, and
+  // is only ever called with dayKey === 'today' (see _getViewModeSequence).
+  _renderSolarGraph(dayKey, hourlyData, draw) {
+    const colWidth = GRAPH_COL_WIDTH;
+    const chartHeight = 64;
+    const padTop = 14;
+    const padBottom = 4;
+    const usable = chartHeight - padTop - padBottom;
+    const width = Math.max(hourlyData.length * colWidth, colWidth);
+
+    const validKw = hourlyData.map(h => parseFloat(h.kw)).filter(v => !isNaN(v));
+    const minKw = validKw.length ? Math.min(...validKw) : 0;
+    const maxKw = validKw.length ? Math.max(...validKw) : 5;
+    const kwMin = Math.min(0, minKw);  // Solar never goes negative — floor at 0
+    const kwMax = maxKw + 1;           // 1kW headroom above the peak
+    const range = kwMax - kwMin || 1;
+
+    const points = hourlyData.map((h, i) => {
+      const x = i * colWidth + colWidth / 2;
+      const kw = parseFloat(h.kw);
+      if (isNaN(kw)) return { x, y: null, kw: null };
+      const y = padTop + usable * (1 - (kw - kwMin) / range);
+      return { x, y, kw };
+    });
+
+    const validPoints = points.filter(p => p.y !== null);
+    const curveSegs = validPoints.length > 1 ? catmullRomSegments(validPoints) : [];
+
+    const extendLeft = validPoints.length > 0 && validPoints[0].kw > kwMin;
+    const topSegs = [];
+    if (extendLeft) {
+      topSegs.push(`M0,${validPoints[0].y.toFixed(1)}`);
+      topSegs.push(`L${validPoints[0].x.toFixed(1)},${validPoints[0].y.toFixed(1)}`);
+      topSegs.push(...curveSegs.slice(1));
+    } else {
+      topSegs.push(...curveSegs);
+    }
+
+    const extendRight = validPoints.length > 0 && validPoints[validPoints.length - 1].kw > kwMin;
+    const baselineY = chartHeight - padBottom;
+    if (extendRight) {
+      const lastPt = validPoints[validPoints.length - 1];
+      const cp1x = lastPt.x + (width - lastPt.x) * 0.5;
+      const cp2x = lastPt.x + (width - lastPt.x) * 0.85;
+      topSegs.push(`C${cp1x.toFixed(1)},${lastPt.y.toFixed(1)} ${cp2x.toFixed(1)},${baselineY.toFixed(1)} ${width.toFixed(1)},${baselineY.toFixed(1)}`);
+    }
+
+    const areaStartX = extendLeft ? 0 : (validPoints.length ? validPoints[0].x : 0);
+    const areaEndX = extendRight ? width : (validPoints.length ? validPoints[validPoints.length - 1].x : 0);
+
+    const linePath = topSegs.join(' ');
+    const areaPath = topSegs.length
+      ? `M${areaStartX.toFixed(1)},${chartHeight} ` +
+        topSegs.join(' ').replace(/^M/, 'L') +
+        ` L${areaEndX.toFixed(1)},${chartHeight} Z`
+      : '';
+
+    const dots = points
+      .filter(p => p.y !== null)
+      .map(p => `<circle class="solar-graph-dot${draw ? ' draw' : ''}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2" fill="${SOLAR_COLOR}"></circle>`)
+      .join('');
+
+    const kwLabels = points
+      .filter(p => p.y !== null && p.kw !== null)
+      .map(p => `
+      <text class="solar-graph-label${draw ? ' draw' : ''}" x="${p.x.toFixed(1)}" y="${(p.y - 6).toFixed(1)}" text-anchor="middle" fill="${SOLAR_COLOR}">${p.kw.toFixed(1)}kW</text>
+    `).join('');
+
+    const timeCols = hourlyData.map(h => `
+      <div class="hourly-graph-col" style="width:${colWidth}px;"><div class="hourly-time">${escapeHtml(h.time)}</div></div>`).join('');
+
+    return `
+      <div class="hourly-graph-scroll" data-day-key="${dayKey}">
+        <div class="hourly-graph-content" style="width:${width}px;">
+          <svg class="hourly-graph-svg" width="${width}" height="${chartHeight}" viewBox="0 0 ${width} ${chartHeight}" preserveAspectRatio="none">
+            <path class="solar-graph-area${draw ? ' draw' : ''}" d="${areaPath}" fill="${SOLAR_COLOR_FILL}"></path>
+            <path class="solar-graph-line${draw ? ' draw' : ''}" d="${linePath}" stroke="${SOLAR_COLOR}" stroke-width="2" fill="none"></path>
+            ${kwLabels}
+            ${dots}
+          </svg>
+          <div class="hourly-graph-row${draw ? ' draw' : ''}">${timeCols}</div>
+        </div>
+      </div>`;
+  }
+
   // Drives the expand draw-on animation imperatively via the Web Animations
   // API — ported from weather-station-card v8. The line draws left-to-right,
   // the area fades in behind it once the line finishes, and the detail
@@ -1206,7 +1556,7 @@ class Dash4WeatherCard extends HTMLElement {
   // tick from wiping it mid-draw. Deliberately not gated on
   // prefers-reduced-motion — matches weather-station-card, owner asked for it.
   _runExpandAnimation() {
-    const line = this.shadowRoot.querySelector('path.temp-graph-line.draw, path.hourly-graph-line.draw');
+    const line = this.shadowRoot.querySelector('path.temp-graph-line.draw, path.solar-graph-line.draw, path.hourly-graph-line.draw');
     if (!line) return;
     try {
       const len = line.getTotalLength();
@@ -1224,7 +1574,7 @@ class Dash4WeatherCard extends HTMLElement {
         [{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
         { duration, delay: 200, easing: 'ease-out', fill: 'forwards' }
       );
-      const area = this.shadowRoot.querySelector('path.temp-graph-area.draw, path.hourly-graph-area.draw');
+      const area = this.shadowRoot.querySelector('path.temp-graph-area.draw, path.solar-graph-area.draw, path.hourly-graph-area.draw');
       if (area) {
         area.style.opacity = 0;
         area.getBoundingClientRect();
@@ -1233,7 +1583,7 @@ class Dash4WeatherCard extends HTMLElement {
           { duration: 800, delay: duration + 300, easing: 'ease-out', fill: 'forwards' }
         );
       }
-      const els = this.shadowRoot.querySelectorAll('circle.draw, text.temp-graph-label.draw, .hourly-graph-row.draw');
+      const els = this.shadowRoot.querySelectorAll('circle.draw, text.temp-graph-label.draw, text.solar-graph-label.draw, .hourly-graph-row.draw');
       const stepCount = Math.max(1, els.length - 1);
       els.forEach((el, i) => {
         const delayMs = 200 + Math.round(duration * (i / stepCount));
@@ -1256,33 +1606,105 @@ class Dash4WeatherCard extends HTMLElement {
     }
   }
 
-  _handleBox3Click() {
-    if (this._clickTimer !== null) {
-      // second click within the window - reset to auto instead of cycling
-      clearTimeout(this._clickTimer);
-      this._clickTimer = null;
-      this._hass.callService('script', 'dash4_box3_reset_to_auto');
-    } else {
-      this._clickTimer = setTimeout(() => {
-        this._clickTimer = null;
-        this._hass.callService('script', 'dash4_box3_tap');
-      }, 260);
-    }
+  // Tapping the arc opens the climate panel, or closes it when open.
+  _handleArcTap() {
+    if (this._climateAnimating) return;
+    this._togglePanel('climate');
   }
 
-  // Opens HA's native more-info dialog (built-in history graph included) for
-  // the given entity — same convention used by energy-flow-card.js.
+  // Opens/closes the given arc panel. Closing when the requested mode is
+  // already open; opening (or swapping to) it otherwise. Morph animation
+  // mirrors the original climate open/close exactly: raf2 double-rAF for the
+  // open (so the height transition paints before the row animations), and the
+  // closing->redraw arc draw-in sequence guarded by `.closing`.
+  _togglePanel(mode) {
+    if (this._climateAnimating) return;
+    this._climateAnimating = true;
+    const arcWrap = this.shadowRoot.querySelector('.arc-wrap');
+    if (this._panelMode === mode) {
+      // CLOSE — revert to arc: layer fades out, then the arc redraws itself
+      // with a 2400ms draw-in and the sun/moon dot snaps back in at the exact
+      // moment the draw completes. The closing guard class keeps the
+      // fully-drawn arc hidden during the fade-back so it doesn't flash.
+      this._panelMode = null;
+      arcWrap.classList.remove('climate-open');
+      arcWrap.classList.add('closing');
+      setTimeout(() => {
+        arcWrap.classList.remove('closing');
+        arcWrap.classList.add('redraw');
+        setTimeout(() => { this._climateAnimating = false; }, 2400);
+      }, 320);
+    } else {
+      // OPEN / swap — morph in-place: arc fades out, panel layer fades in.
+      this._panelMode = mode;
+      this._renderTitleOnly();
+      raf2(() => {
+        arcWrap.classList.remove('climate-open', 'redraw');
+        arcWrap.classList.add('climate-open');
+        setTimeout(() => { this._climateAnimating = false; }, 500);
+      });
+    }
+    this._applyArcColor();
+    this._updateTapHint();
+  }
+
+  // Extra classes on .arc-wrap for whichever panel is open.
+  _arcPanelClass() {
+    return this._panelMode === 'climate' ? ' climate-open' : '';
+  }
+
+  _updateTapHint() {
+    const hint = this.shadowRoot.querySelector('.tap-hint');
+    if (!hint) return;
+    const hasClimate = !!(this._hass && this._hass.states['sensor.climate_drivers_card']);
+    if (!hasClimate) { hint.classList.add('hidden'); return; }
+    hint.classList.remove('hidden');
+    if (this._panelMode) hint.textContent = '▲ Tap to collapse';
+    else hint.textContent = 'Tap arc for climate drivers';
+  }
+
+
+  // Reads an element's live text colour and converts it to hex for the
+  // entity popup's --line-color. Near-grayscale colours (the default
+  // --primary-text-color white, when no high-temp/low-temp/aqi class is
+  // active) return null so the popup falls back to its own gold default
+  // instead of drawing a washed-out white graph line.
+  _swatchColor(el) {
+    if (!el) return null;
+    const m = getComputedStyle(el).color.match(/\d+/g);
+    if (!m) return null;
+    const [r, g, b] = m.map(Number);
+    if (Math.max(r, g, b) - Math.min(r, g, b) < 12) return null;
+    return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+  }
+
   _openMoreInfo(entityId) {
-    const event = new CustomEvent('hass-more-info', {
-      bubbles: true, composed: true, detail: { entityId },
-    });
-    this.dispatchEvent(event);
+    this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId } }));
   }
 
   // Returns the appropriate initial view mode for a newly expanded day:
   // rain graph when it's currently raining, temperature graph otherwise.
   _getInitialViewMode(isRaining) {
     return isRaining ? 'rain_graph' : 'temp_graph';
+  }
+
+  // Returns the ordered list of view modes the tap-cycle advances through
+  // for a given expanded row. Today gets an extra 'solar_graph' mode
+  // inserted right after 'temp_graph' (Solcast data is Today-only — see
+  // packages/dash4_weather_card.yaml's hourly_rain_today 'kw' field, added
+  // 2026-08-24); Tomorrow/Day-after keep the original 2-graph + raw cycle.
+  // 'raw' is always last and is the cycle's terminal state (see
+  // _handleGraphTap — tapping again once on 'raw' stays on 'raw'; only a
+  // double-tap or re-tapping the row header collapses it).
+  _getViewModeSequence(dayKey, isRaining) {
+    const sequence = isRaining ? ['rain_graph', 'temp_graph'] : ['temp_graph', 'rain_graph'];
+    const attrs = this._hass && this._hass.states[this._entityId] && this._hass.states[this._entityId].attributes;
+    const hasSolar = !!(attrs && (attrs.hourly_rain_today || []).some(h => h && h.kw !== null && h.kw !== undefined));
+    if (dayKey === 'today' && hasSolar) {
+      sequence.splice(sequence.indexOf('temp_graph') + 1, 0, 'solar_graph');
+    }
+    sequence.push('raw');
+    return sequence;
   }
 
   // Tapping the row header while its own panel is already expanded mirrors
@@ -1361,15 +1783,13 @@ class Dash4WeatherCard extends HTMLElement {
     } else {
       this._graphTapTimer = setTimeout(() => {
         this._graphTapTimer = null;
-        // single tap -> cycle through views, ordered by the current default:
-        // not raining: temp_graph -> rain_graph -> raw
-        // raining:     rain_graph -> temp_graph -> raw (raw's own tap collapses)
-        const initial = this._getInitialViewMode(this._isRaining);
-        if (this._viewMode === initial) {
-          this._viewMode = initial === 'temp_graph' ? 'rain_graph' : 'temp_graph';
-        } else {
-          this._viewMode = 'raw';
-        }
+        // single tap -> advance to the next mode in this row's sequence
+        // (see _getViewModeSequence). 'raw' is terminal — advancing past
+        // the end of the sequence stays on the last entry.
+        const sequence = this._getViewModeSequence(this._expandedDay, this._isRaining);
+        const curIdx = sequence.indexOf(this._viewMode);
+        const nextIdx = curIdx === -1 ? 0 : Math.min(curIdx + 1, sequence.length - 1);
+        this._viewMode = sequence[nextIdx];
         this._render();
       }, 260);
     }
@@ -1377,11 +1797,3 @@ class Dash4WeatherCard extends HTMLElement {
 }
 
 customElements.define('dash4-weather-card', Dash4WeatherCard);
-
-// Register with the Lovelace card picker so users can add the card from the UI.
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: 'dash4-weather-card',
-  name: 'DASH-4 Weather Card (WeatherFlow + BOM)',
-  description: 'Newspaper-style weather card for a WeatherFlow Tempest station plus Bureau of Meteorology forecasts (Australia).',
-});

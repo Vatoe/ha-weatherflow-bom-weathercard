@@ -1,0 +1,29 @@
+# Climate Drivers — DASH-4 arc-morph panel data layer (SOI/IOD/SAM/STR/MJO).
+# See the DASH-4 climate-drivers design spec (2026-08-19).
+
+command_line:
+  - sensor:
+      name: climate_drivers_card
+      unique_id: climate_drivers_card
+      command: 'python3 -c "import json,os; f=''/config/data/climate-drivers/card.json''; d=json.load(open(f)) if os.path.exists(f) else {}; print(json.dumps(d))"'
+      scan_interval: 300
+      value_template: "{{ value_json.generated_at | default('unknown') }}"
+      json_attributes:
+        - outlook
+        - summary_text
+        - drivers
+
+shell_command:
+  climate_drivers_scan: "mkdir -p /config/data/climate-drivers && python3 -u /config/scripts/climate_drivers.py >> /config/data/climate-drivers/scan.log 2>&1"
+
+automation:
+  - id: climate_drivers_card_daily_scan
+    alias: "🌤️ Weather | Climate Drivers card scan"
+    description: "Fetches SOI/IOD/SAM/STR/MJO + the official ENSO outlook probability once a day and feeds the DASH-4 weather card's arc-morph climate drivers panel."
+    triggers:
+      - trigger: time
+        at: "06:30:00"
+        id: daily
+    actions:
+      - action: shell_command.climate_drivers_scan
+    mode: single

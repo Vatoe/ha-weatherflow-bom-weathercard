@@ -15,14 +15,29 @@
 # to the newest available (Date, Hour) so yesterday's worst event can't
 # masquerade as today's air quality.
 #
+# Category-classification lag (found 2026-08-20): the API publishes raw
+# pollutant Values for the current hour promptly, but the AirQualityCategory
+# field for that same hour is classified separately and can lag the Value by
+# over an hour. Our hourly poll frequently landed on a newest-hour row set
+# that had Values but no Category yet, which - under a strict "rank only the
+# single newest (Date, Hour)" rule - produced no_data even though the API was
+# fully healthy and the previous hour's category was sitting right there.
+# Confirmed live: a direct call to the API returned HTTP 200 with real
+# categorized data while our sensor was showing no_data. Fixed by computing
+# "newest" only over rows that already carry a valid category, i.e. falling
+# back to the most recent hour that HAS been classified, instead of the
+# most recent hour period. This still can't let a prior day's reading
+# masquerade as current, since the fallback only skips hours with zero
+# categorized rows (a same-day publish-lag artifact), not entire days.
+#
 # API docs: https://data.airquality.nsw.gov.au/docs/index.html - no API key,
 # no registration, fully open. Find your own site_id via a GET to
 # https://data.airquality.nsw.gov.au/api/Data/get_SiteDetails.
 #
 # Implementation note (HA 2026.7.4): the rest platform no longer supports
 # json_attributes_template, so the ranking can't run in a template attribute.
-# The ranking picks the worst-category pollutant in the NEWEST available hour
-# of the rolling window (see note above).
+# The ranking picks the worst-category pollutant in the newest available hour
+# that has at least one categorized row (see note above).
 # Instead this file uses a two-sensor chain: the rest: sensor does the
 # ranking in its value_template and stores the worst-pollutant dict as a JSON
 # string in its state, then a trigger-based template sensor (sensor.
@@ -55,23 +70,31 @@ rest:
       - name: "Dash4 Air Quality Raw"
         unique_id: dash4_air_quality_raw
         value_template: >-
-          {# Rolling window returns rows from both days; rank ONLY within the
-             newest (Date, Hour) present, so a prior day's bad event can't
-             masquerade as current conditions. The API's Date is "yyyy-MM-dd"
-             (ISO, sorts chronologically) and Hour is int 1-24 AEST. #}
+          {# Rolling window returns rows from both days; rank within the
+             newest (Date, Hour) that has at least one CATEGORIZED row, so a
+             prior day's bad event can't masquerade as current conditions,
+             but a same-day category-classification lag on the very latest
+             hour (Values published before Category is assigned - found
+             2026-08-20) doesn't collapse to no_data either. The API's Date
+             is "yyyy-MM-dd" (ISO, sorts chronologically) and Hour is int
+             1-24 AEST. #}
           {% set rows = value_json if value_json is sequence and value_json is not string else [] %}
+          {% set rank = {'GOOD': 0, 'FAIR': 1, 'POOR': 2, 'VERY POOR': 3, 'EXTREMELY POOR': 4} %}
           {% set ns = namespace(newest=none) %}
           {% for obs in rows %}
-            {% set stamp = (obs.Date, obs.Hour) %}
-            {% if ns.newest is none or stamp > ns.newest %}
-              {% set ns.newest = stamp %}
+            {% set cat_raw = obs.AirQualityCategory | default(none, true) %}
+            {% set cat_key = (cat_raw | upper | trim) if cat_raw else none %}
+            {% if cat_key and cat_key in rank %}
+              {% set stamp = (obs.Date, obs.Hour) %}
+              {% if ns.newest is none or stamp > ns.newest %}
+                {% set ns.newest = stamp %}
+              {% endif %}
             {% endif %}
           {% endfor %}
           {% set newest = ns.newest %}
-          {% set rank = {'GOOD': 0, 'FAIR': 1, 'POOR': 2, 'VERY POOR': 3, 'EXTREMELY POOR': 4} %}
           {% set ns = namespace(worst=none, worst_rank=-1) %}
           {% for obs in rows %}
-            {% if (obs.Date, obs.Hour) == newest %}
+            {% if newest is not none and (obs.Date, obs.Hour) == newest %}
               {% set cat_raw = obs.AirQualityCategory | default(none, true) %}
               {% set cat_key = (cat_raw | upper | trim) if cat_raw else none %}
               {% if cat_key and cat_key in rank and rank[cat_key] > ns.worst_rank %}
@@ -160,3 +183,29 @@ template:
           {% else %}
             {{ this.state }}
           {% endif %}
+  - trigger:
+      - trigger: state
+        entity_id: sensor.dash4_air_quality_raw
+      - trigger: time_pattern
+        minutes: "/15"
+      - trigger: homeassistant
+        event: start
+    binary_sensor:
+      - name: "Dash4 AQ API Offline"
+        unique_id: dash4_aq_api_offline
+        device_class: problem
+        availability: >-
+          {% set raw = states('sensor.dash4_air_quality_raw') %}
+          {{ raw not in ['unknown', 'unavailable', ''] }}
+        state: >-
+          {# Raw sensor has been no_data continuously for 90+ min. last_changed (not
+             last_updated) is the right clock: a continued hourly poll that keeps
+             rendering no_data refreshes last_updated but NOT last_changed, so this
+             stays true through sustained no_data even while polling continues. #}
+          {% set raw = states('sensor.dash4_air_quality_raw') %}
+          {% set raw_state = states.sensor.dash4_air_quality_raw %}
+          {{
+            raw == 'no_data'
+            and raw_state is not none
+            and (now().timestamp() - as_timestamp(raw_state.last_changed)) > 5400
+          }}

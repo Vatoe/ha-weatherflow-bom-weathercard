@@ -20,3 +20,10 @@ input_text:
                                                 # https://data.airquality.nsw.gov.au/api/Data/get_SiteDetails
                                                 # (NSW only - see packages/dash4_air_quality.yaml).
     max: 255
+  dash4_solar_forecast_entity:
+    name: "Dash4 Solar Forecast Entity"
+    initial: ""                                # optional - leave blank to hide the Solar graph entirely. To enable:
+                                                # enter the entity_id of a sensor that exposes today's forecast
+                                                # (e.g. a Solcast "forecast today" sensor with a detailedHourly /
+                                                # detailedForecast attribute). Today's hourly graphs gain a Solar step.
+    max: 255
