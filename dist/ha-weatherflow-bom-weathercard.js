@@ -523,6 +523,11 @@ class Dash4WeatherCard extends HTMLElement {
     if (this._connected) this._render();
   }
 
+  // Shown in the Lovelace card picker ("Add card" dialog) as the starting config.
+  static getStubConfig() {
+    return { entity: 'sensor.dash4_weather_card', place_name: 'MY HOME' };
+  }
+
   getCardSize() {
     return 9;
   }
@@ -1372,3 +1377,11 @@ class Dash4WeatherCard extends HTMLElement {
 }
 
 customElements.define('dash4-weather-card', Dash4WeatherCard);
+
+// Register with the Lovelace card picker so users can add the card from the UI.
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: 'dash4-weather-card',
+  name: 'DASH-4 Weather Card (WeatherFlow + BOM)',
+  description: 'Newspaper-style weather card for a WeatherFlow Tempest station plus Bureau of Meteorology forecasts (Australia).',
+});

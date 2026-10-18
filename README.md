@@ -81,7 +81,7 @@ A footer strip surfaces any active BOM warnings for your configured location (`d
 
 ### 1. The card (via HACS)
 
-Add this repository as a HACS custom repository (category: **Dashboard**), then install "WeatherFlow + BOM Weather Card." This installs `ha-weatherflow-bom-weathercard.js` as a Lovelace resource automatically.
+Open HACS, search for **DASH-4 Weather Card (WeatherFlow + BOM)** and download it. This installs `ha-weatherflow-bom-weathercard.js` as a Lovelace resource automatically — no custom repository needed, the card is in HACS's default list.
 
 Alternatively, copy `dist/ha-weatherflow-bom-weathercard.js` into your own `config/www/` folder and add it manually as a Lovelace resource (Settings → Dashboards → Resources → Add Resource, type: JavaScript Module). The internal card tag stays `custom:dash4-weather-card` either way (see step 3) — only the distributed filename changed, to satisfy HACS's naming convention.
 
