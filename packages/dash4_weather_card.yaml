@@ -121,7 +121,7 @@ template:
                 'cls': ('wind-notable' if gusting else ''),
                 'compact': false
               },
-              'rain': {'label': 'Rain', 'value': (rain_rate | round(1) | string), 'sub': (rain_intensity | title if rain_intensity not in ['none','unknown','unavailable',''] else 'None'), 'cls': 'rain', 'compact': false},
+              'rain': {'label': 'Rain', 'value': (rain_rate | round(1) | string), 'sub': (rain_intensity | title if rain_intensity not in ['none','No Rain','unknown','unavailable',''] else 'None'), 'cls': 'rain', 'compact': false},
               'lightning': {'label': 'Lightning', 'value': (lightning_count | string), 'sub': 'strikes/hr', 'cls': 'lightning', 'compact': false},
               'uv': {'label': ('UV · ' ~ uv_rating), 'value': (uv | round(0) | int | string), 'sub': '', 'cls': 'uv', 'compact': true},
               'feels_like': {'label': 'Feels Like', 'value': feels_str, 'sub': '', 'cls': feels_cls, 'compact': true},
@@ -144,7 +144,7 @@ template:
                rate - otherwise box3 can select/prioritize "Rain" while showing 0.0 (a
                stale/lagging intensity reading vs a real-time rate of zero). Added 2026-07-18. #}
             {% set wf = states('input_text.dash4_weatherflow_prefix') %}
-            {{ states(('sensor.' ~ wf ~ '_rain_intensity')) not in ['none', 'unknown', 'unavailable', ''] and (states(('sensor.' ~ wf ~ '_rain_rate')) | float(0) > 0) }}
+            {{ states(('sensor.' ~ wf ~ '_rain_intensity')) not in ['none', 'No Rain', 'unknown', 'unavailable', ''] and (states(('sensor.' ~ wf ~ '_rain_rate')) | float(0) > 0) }}
           lightning_active: >-
             {% set wf = states('input_text.dash4_weatherflow_prefix') %}
             {{ states(('sensor.' ~ wf ~ '_lightning_count_last_hour')) | int(0) > 0 }}
